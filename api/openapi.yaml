@@ -42,9 +42,9 @@ info:
   license:
     name: MIT
   title: GeoAPI
-  version: 1.2.0
+  version: 1.2.1
 servers:
-- url: /
+- url: https://geosearch.dev
 security:
 - apiKeyAuth: []
 tags:
