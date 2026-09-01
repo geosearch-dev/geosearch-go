@@ -1,0 +1,4053 @@
+openapi: 3.1.0
+info:
+  contact:
+    name: GeoAPI Support
+  description: |
+    Geographic data REST API — modern replacement for GeoNames.
+
+    Serves countries, regions, cities, postal codes, timezones, and IP geolocation data
+    through a fast, well-documented JSON API with cursor-based pagination and field selection.
+
+    ## Authentication
+    All endpoints (except health check) require an API key passed via the `X-API-Key` header.
+
+    ## Rate Limiting
+    Two independent limits apply to every authenticated request: a per-second
+    throttle and a monthly quota. They fail with different error codes because
+    they call for different client behaviour — `rate_limit_exceeded` means back
+    off for a moment, `quota_exceeded` means the plan's monthly allowance is
+    exhausted until the period resets.
+
+    Responses include rate limit headers:
+    - `X-RateLimit-Limit` — requests per second allowed
+    - `X-RateLimit-Remaining` — requests remaining in current window
+    - `X-RateLimit-Reset` — **Unix epoch second** at which the applicable limit
+      resets. This is an absolute timestamp, not a duration. On a
+      `quota_exceeded` response it carries the end of the monthly quota period
+      rather than the next second boundary.
+    - `X-Monthly-RateLimit-Limit` — monthly quota
+    - `X-Monthly-RateLimit-Remaining` — monthly requests remaining
+    - `X-RateLimit-Upgrade` — advisory message, present only once monthly usage
+      passes 80% of the plan's quota
+    - `Retry-After` — seconds to wait before retrying. Present on both 429s and
+      the unambiguous duration; prefer it over deriving one from
+      `X-RateLimit-Reset`.
+
+    ## Pagination
+    List endpoints use cursor-based pagination with `cursor` and `limit` parameters.
+    Maximum limit is 100. Responses include pagination metadata in the `meta` object.
+
+    ## Field Selection
+    Use `?fields=name,population` on any endpoint to receive only the specified fields.
+  license:
+    name: MIT
+  title: GeoAPI
+  version: 1.2.0
+servers:
+- url: /
+security:
+- apiKeyAuth: []
+tags:
+- description: API health and status
+  name: Health
+- description: Country data and regions within countries
+  name: Countries
+- description: Administrative regions/states/provinces
+  name: Regions
+- description: City data with geographic coordinates
+  name: Cities
+- description: Postal/ZIP codes with nearest-neighbor search
+  name: Postal Codes
+- description: IANA timezone data
+  name: Timezones
+- description: IP address geolocation lookup
+  name: IP Geolocation
+- description: Cross-type fuzzy text search
+  name: Search
+- description: "Boundary polygons as GeoJSON. Charges 5 quota units per served polygon;\
+    \ region boundaries require a paid plan, country boundaries do not."
+  name: Boundaries
+- description: Batch lookup endpoints for multiple entities in a single request
+  name: Batch
+paths:
+  /v1/status:
+    get:
+      description: Returns the API health status and database connectivity. No authentication
+        required.
+      operationId: getStatus
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                data:
+                  status: healthy
+                  database: connected
+              schema:
+                $ref: "#/components/schemas/getStatus_200_response"
+          description: API status
+      security: []
+      summary: Health check
+      tags:
+      - Health
+      x-codeSamples:
+      - lang: curl
+        source: curl https://geosearch.dev/v1/status
+      - lang: Go
+        source: |
+          resp, err := http.Get("https://geosearch.dev/v1/status")
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get("https://geosearch.dev/v1/status")
+          print(r.json())
+      - lang: JavaScript
+        source: |
+          const resp = await fetch("https://geosearch.dev/v1/status");
+          const data = await resp.json();
+  /v1/countries:
+    get:
+      description: Returns a paginated list of countries with optional filtering and
+        sorting.
+      operationId: listCountries
+      parameters:
+      - $ref: "#/components/parameters/lang"
+      - $ref: "#/components/parameters/continent"
+      - description: Filter by ISO alpha-2 codes (comma-separated)
+        example: "US,CA,GB"
+        explode: true
+        in: query
+        name: iso_code
+        required: false
+        schema:
+          type: string
+        style: form
+      - $ref: "#/components/parameters/population_min"
+      - $ref: "#/components/parameters/population_max"
+      - $ref: "#/components/parameters/cursor"
+      - $ref: "#/components/parameters/limit"
+      - $ref: "#/components/parameters/fields"
+      - description: "Sort field and direction. Allowed: name, population, area_sq_km.\
+          \ Prefix with - for descending."
+        example: -population
+        explode: true
+        in: query
+        name: sort
+        required: false
+        schema:
+          type: string
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                data:
+                - id: 1
+                  iso_code: US
+                  iso3_code: USA
+                  name: United States
+                  capital: Washington
+                  population: 331002651
+                  continent_code: NA
+                  flag_emoji: 🇺🇸
+                meta:
+                  next_cursor: eyJpZCI6MjV9
+                  has_next: true
+                  has_prev: false
+                  count: 25
+              schema:
+                $ref: "#/components/schemas/CountryListResponse"
+          description: List of countries
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: List countries
+      tags:
+      - Countries
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" \
+            "https://geosearch.dev/v1/countries?continent=EU&limit=10"
+      - lang: Go
+        source: |
+          req, _ := http.NewRequest("GET", "https://geosearch.dev/v1/countries?continent=EU", nil)
+          req.Header.Set("X-API-Key", "YOUR_KEY")
+          resp, err := http.DefaultClient.Do(req)
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/countries",
+              headers={"X-API-Key": "YOUR_KEY"},
+              params={"continent": "EU", "limit": 10}
+          )
+          print(r.json())
+      - lang: JavaScript
+        source: |
+          const resp = await fetch(
+            "https://geosearch.dev/v1/countries?continent=EU&limit=10",
+            { headers: { "X-API-Key": "YOUR_KEY" } }
+          );
+          const data = await resp.json();
+  /v1/countries/{code}:
+    get:
+      description: Returns a single country by its ISO alpha-2 code.
+      operationId: getCountry
+      parameters:
+      - description: ISO alpha-2 country code
+        example: US
+        explode: false
+        in: path
+        name: code
+        required: true
+        schema:
+          maxLength: 2
+          minLength: 2
+          type: string
+        style: simple
+      - $ref: "#/components/parameters/lang"
+      - $ref: "#/components/parameters/fields"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CountrySingleResponse"
+          description: Country details
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: Get country by ISO code
+      tags:
+      - Countries
+      x-codeSamples:
+      - lang: curl
+        source: "curl -H \"X-API-Key: YOUR_KEY\" https://geosearch.dev/v1/countries/US"
+      - lang: Go
+        source: |
+          req, _ := http.NewRequest("GET", "https://geosearch.dev/v1/countries/US", nil)
+          req.Header.Set("X-API-Key", "YOUR_KEY")
+          resp, err := http.DefaultClient.Do(req)
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/countries/US",
+              headers={"X-API-Key": "YOUR_KEY"}
+          )
+      - lang: JavaScript
+        source: |
+          const resp = await fetch(
+            "https://geosearch.dev/v1/countries/US",
+            { headers: { "X-API-Key": "YOUR_KEY" } }
+          );
+  /v1/countries/{code}/regions:
+    get:
+      description: Returns a paginated list of regions (administrative divisions)
+        within a country.
+      operationId: listCountryRegions
+      parameters:
+      - description: ISO alpha-2 country code
+        example: US
+        explode: false
+        in: path
+        name: code
+        required: true
+        schema:
+          type: string
+        style: simple
+      - $ref: "#/components/parameters/lang"
+      - $ref: "#/components/parameters/cursor"
+      - $ref: "#/components/parameters/limit"
+      - $ref: "#/components/parameters/fields"
+      - description: "Sort field. Allowed: name, population."
+        example: name
+        explode: true
+        in: query
+        name: sort
+        required: false
+        schema:
+          type: string
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegionListResponse"
+          description: List of regions
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: List regions in a country
+      tags:
+      - Countries
+      x-codeSamples:
+      - lang: curl
+        source: "curl -H \"X-API-Key: YOUR_KEY\" https://geosearch.dev/v1/countries/US/regions"
+      - lang: Go
+        source: |
+          req, _ := http.NewRequest("GET", "https://geosearch.dev/v1/countries/US/regions", nil)
+          req.Header.Set("X-API-Key", "YOUR_KEY")
+          resp, err := http.DefaultClient.Do(req)
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/countries/US/regions",
+              headers={"X-API-Key": "YOUR_KEY"}
+          )
+      - lang: JavaScript
+        source: |
+          const resp = await fetch(
+            "https://geosearch.dev/v1/countries/US/regions",
+            { headers: { "X-API-Key": "YOUR_KEY" } }
+          );
+  /v1/regions:
+    get:
+      description: "Returns a paginated list of regions with optional filtering by\
+        \ country, level, and population."
+      operationId: listRegions
+      parameters:
+      - $ref: "#/components/parameters/lang"
+      - description: Filter by ISO alpha-2 country code
+        example: US
+        explode: true
+        in: query
+        name: country
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Filter by administrative level
+        example: 1
+        explode: true
+        in: query
+        name: level
+        required: false
+        schema:
+          type: integer
+        style: form
+      - $ref: "#/components/parameters/population_min"
+      - $ref: "#/components/parameters/population_max"
+      - $ref: "#/components/parameters/cursor"
+      - $ref: "#/components/parameters/limit"
+      - $ref: "#/components/parameters/fields"
+      - description: "Sort field. Allowed: name, population."
+        example: -population
+        explode: true
+        in: query
+        name: sort
+        required: false
+        schema:
+          type: string
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegionListResponse"
+          description: List of regions
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: List regions
+      tags:
+      - Regions
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" \
+            "https://geosearch.dev/v1/regions?country=US&sort=-population"
+      - lang: Go
+        source: |
+          req, _ := http.NewRequest("GET", "https://geosearch.dev/v1/regions?country=US", nil)
+          req.Header.Set("X-API-Key", "YOUR_KEY")
+          resp, err := http.DefaultClient.Do(req)
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/regions",
+              headers={"X-API-Key": "YOUR_KEY"},
+              params={"country": "US", "sort": "-population"}
+          )
+      - lang: JavaScript
+        source: |
+          const resp = await fetch(
+            "https://geosearch.dev/v1/regions?country=US",
+            { headers: { "X-API-Key": "YOUR_KEY" } }
+          );
+  /v1/regions/{id}:
+    get:
+      description: Returns a single region by its numeric ID.
+      operationId: getRegion
+      parameters:
+      - description: Region ID
+        example: 5332921
+        explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          format: int64
+          type: integer
+        style: simple
+      - $ref: "#/components/parameters/lang"
+      - $ref: "#/components/parameters/fields"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegionSingleResponse"
+          description: Region details
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: Get region by ID
+      tags:
+      - Regions
+      x-codeSamples:
+      - lang: curl
+        source: "curl -H \"X-API-Key: YOUR_KEY\" https://geosearch.dev/v1/regions/5332921"
+      - lang: Go
+        source: |
+          req, _ := http.NewRequest("GET", "https://geosearch.dev/v1/regions/5332921", nil)
+          req.Header.Set("X-API-Key", "YOUR_KEY")
+          resp, err := http.DefaultClient.Do(req)
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/regions/5332921",
+              headers={"X-API-Key": "YOUR_KEY"}
+          )
+      - lang: JavaScript
+        source: |
+          const resp = await fetch(
+            "https://geosearch.dev/v1/regions/5332921",
+            { headers: { "X-API-Key": "YOUR_KEY" } }
+          );
+  /v1/regions/{id}/cities:
+    get:
+      description: |-
+        Returns a paginated list of cities within a specific region.
+
+        THIS ENDPOINT AND `/v1/cities?within=` ANSWER DIFFERENT QUESTIONS AND WILL SOMETIMES RETURN DIFFERENT CITIES FOR THE SAME REGION. That is intended, not a bug. This endpoint answers the ADMINISTRATIVE question — which cities are assigned to this region by GeoNames' own admin codes — while `?within=` answers the GEOMETRIC one, which cities fall inside the region's polygon. The two disagree wherever an enclave, an exclave or a blank admin code puts a city's assignment at odds with its location.
+
+        Use this endpoint when you want the official assignment; use `/v1/cities?within=` when you want what is physically inside the boundary. This one is charged at the standard 1 unit; `?within=` costs 2.
+      operationId: listRegionCities
+      parameters:
+      - description: Region ID
+        example: 5332921
+        explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          format: int64
+          type: integer
+        style: simple
+      - $ref: "#/components/parameters/lang"
+      - $ref: "#/components/parameters/cursor"
+      - $ref: "#/components/parameters/limit"
+      - $ref: "#/components/parameters/fields"
+      - description: "Sort field. Allowed: name, population."
+        example: -population
+        explode: true
+        in: query
+        name: sort
+        required: false
+        schema:
+          type: string
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CityListResponse"
+          description: List of cities
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: List cities in a region
+      tags:
+      - Regions
+      x-codeSamples:
+      - lang: curl
+        source: "curl -H \"X-API-Key: YOUR_KEY\" https://geosearch.dev/v1/regions/5332921/cities"
+      - lang: Go
+        source: |
+          req, _ := http.NewRequest("GET", "https://geosearch.dev/v1/regions/5332921/cities", nil)
+          req.Header.Set("X-API-Key", "YOUR_KEY")
+          resp, err := http.DefaultClient.Do(req)
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/regions/5332921/cities",
+              headers={"X-API-Key": "YOUR_KEY"}
+          )
+      - lang: JavaScript
+        source: |
+          const resp = await fetch(
+            "https://geosearch.dev/v1/regions/5332921/cities",
+            { headers: { "X-API-Key": "YOUR_KEY" } }
+          );
+  /v1/cities:
+    get:
+      description: "Returns a paginated list of cities with optional filtering by\
+        \ country, admin code, name, population, timezone, and elevation."
+      operationId: listCities
+      parameters:
+      - $ref: "#/components/parameters/lang"
+      - description: Filter by ISO alpha-2 country codes (comma-separated)
+        example: "US,CA"
+        explode: true
+        in: query
+        name: country
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Filter by admin1 code (state/province)
+        example: CA
+        explode: true
+        in: query
+        name: admin1
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Filter by city name (trigram fuzzy search)
+        example: San Fran
+        explode: true
+        in: query
+        name: name
+        required: false
+        schema:
+          type: string
+        style: form
+      - $ref: "#/components/parameters/population_min"
+      - $ref: "#/components/parameters/population_max"
+      - description: Filter by IANA timezone ID
+        example: America/Los_Angeles
+        explode: true
+        in: query
+        name: timezone
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Minimum elevation in meters
+        example: 500
+        explode: true
+        in: query
+        name: min_elevation
+        required: false
+        schema:
+          type: integer
+        style: form
+      - description: Maximum elevation in meters
+        example: 3000
+        explode: true
+        in: query
+        name: max_elevation
+        required: false
+        schema:
+          type: integer
+        style: form
+      - $ref: "#/components/parameters/within"
+      - $ref: "#/components/parameters/bbox"
+      - $ref: "#/components/parameters/cursor"
+      - $ref: "#/components/parameters/limit"
+      - $ref: "#/components/parameters/fields"
+      - description: "Sort field. Allowed: name, population, elevation, id."
+        example: -population
+        explode: true
+        in: query
+        name: sort
+        required: false
+        schema:
+          type: string
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                data:
+                - id: 5391959
+                  geoname_id: 5391959
+                  name: San Francisco
+                  ascii_name: San Francisco
+                  country_code: US
+                  admin1_code: CA
+                  population: 873965
+                  timezone: America/Los_Angeles
+                  latitude: 37.77493
+                  longitude: -122.41942
+                meta:
+                  next_cursor: eyJpZCI6NTM5MTk2MH0
+                  has_next: true
+                  has_prev: false
+                  count: 25
+              schema:
+                $ref: "#/components/schemas/CityListResponse"
+          description: List of cities
+        "400":
+          $ref: "#/components/responses/AreaBadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/AreaQueryTimeout"
+      summary: List cities
+      tags:
+      - Cities
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" \
+            "https://geosearch.dev/v1/cities?country=US&name=San+Fran&limit=10"
+      - lang: Go
+        source: |
+          req, _ := http.NewRequest("GET",
+            "https://geosearch.dev/v1/cities?country=US&name=San+Fran", nil)
+          req.Header.Set("X-API-Key", "YOUR_KEY")
+          resp, err := http.DefaultClient.Do(req)
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/cities",
+              headers={"X-API-Key": "YOUR_KEY"},
+              params={"country": "US", "name": "San Fran", "limit": 10}
+          )
+      - lang: JavaScript
+        source: |
+          const resp = await fetch(
+            "https://geosearch.dev/v1/cities?country=US&name=San+Fran&limit=10",
+            { headers: { "X-API-Key": "YOUR_KEY" } }
+          );
+  /v1/cities/{id}:
+    get:
+      description: Returns a single city by its numeric ID.
+      operationId: getCity
+      parameters:
+      - description: City ID
+        example: 5391959
+        explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          format: int64
+          type: integer
+        style: simple
+      - $ref: "#/components/parameters/lang"
+      - $ref: "#/components/parameters/fields"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CitySingleResponse"
+          description: City details
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: Get city by ID
+      tags:
+      - Cities
+      x-codeSamples:
+      - lang: curl
+        source: "curl -H \"X-API-Key: YOUR_KEY\" https://geosearch.dev/v1/cities/5391959"
+      - lang: Go
+        source: |
+          req, _ := http.NewRequest("GET", "https://geosearch.dev/v1/cities/5391959", nil)
+          req.Header.Set("X-API-Key", "YOUR_KEY")
+          resp, err := http.DefaultClient.Do(req)
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/cities/5391959",
+              headers={"X-API-Key": "YOUR_KEY"}
+          )
+      - lang: JavaScript
+        source: |
+          const resp = await fetch(
+            "https://geosearch.dev/v1/cities/5391959",
+            { headers: { "X-API-Key": "YOUR_KEY" } }
+          );
+  /v1/postal-codes:
+    get:
+      description: Returns a paginated list of postal codes with optional filtering
+        by country and code.
+      operationId: listPostalCodes
+      parameters:
+      - $ref: "#/components/parameters/lang"
+      - description: Filter by ISO alpha-2 country codes (comma-separated)
+        example: US
+        explode: true
+        in: query
+        name: country
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Filter by postal code
+        example: "94105"
+        explode: true
+        in: query
+        name: code
+        required: false
+        schema:
+          type: string
+        style: form
+      - $ref: "#/components/parameters/within"
+      - $ref: "#/components/parameters/bbox"
+      - $ref: "#/components/parameters/cursor"
+      - $ref: "#/components/parameters/limit"
+      - $ref: "#/components/parameters/fields"
+      - description: "Sort field. Allowed: postal_code, country_code, place_name,\
+          \ id."
+        example: postal_code
+        explode: true
+        in: query
+        name: sort
+        required: false
+        schema:
+          type: string
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostalCodeListResponse"
+          description: List of postal codes
+        "400":
+          $ref: "#/components/responses/AreaBadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/AreaQueryTimeout"
+      summary: List postal codes
+      tags:
+      - Postal Codes
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" \
+            "https://geosearch.dev/v1/postal-codes?country=US&code=94105"
+      - lang: Go
+        source: |
+          req, _ := http.NewRequest("GET",
+            "https://geosearch.dev/v1/postal-codes?country=US&code=94105", nil)
+          req.Header.Set("X-API-Key", "YOUR_KEY")
+          resp, err := http.DefaultClient.Do(req)
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/postal-codes",
+              headers={"X-API-Key": "YOUR_KEY"},
+              params={"country": "US", "code": "94105"}
+          )
+      - lang: JavaScript
+        source: |
+          const resp = await fetch(
+            "https://geosearch.dev/v1/postal-codes?country=US&code=94105",
+            { headers: { "X-API-Key": "YOUR_KEY" } }
+          );
+  /v1/postal-codes/nearest:
+    get:
+      description: Returns the nearest postal codes to a given latitude/longitude
+        using PostGIS spatial index.
+      operationId: nearestPostalCode
+      parameters:
+      - $ref: "#/components/parameters/lang"
+      - description: Latitude (-90 to 90)
+        example: 37.7749
+        explode: true
+        in: query
+        name: lat
+        required: true
+        schema:
+          format: double
+          maximum: 90
+          minimum: -90
+          type: number
+        style: form
+      - description: Longitude (-180 to 180)
+        example: -122.4194
+        explode: true
+        in: query
+        name: lon
+        required: true
+        schema:
+          format: double
+          maximum: 180
+          minimum: -180
+          type: number
+        style: form
+      - description: "Number of results (1-10, default 1)"
+        example: 3
+        explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 1
+          maximum: 10
+          minimum: 1
+          type: integer
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostalCodeListResponse"
+          description: Nearest postal codes
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: Find nearest postal codes
+      tags:
+      - Postal Codes
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" \
+            "https://geosearch.dev/v1/postal-codes/nearest?lat=37.7749&lon=-122.4194&limit=3"
+      - lang: Go
+        source: |
+          req, _ := http.NewRequest("GET",
+            "https://geosearch.dev/v1/postal-codes/nearest?lat=37.7749&lon=-122.4194&limit=3", nil)
+          req.Header.Set("X-API-Key", "YOUR_KEY")
+          resp, err := http.DefaultClient.Do(req)
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/postal-codes/nearest",
+              headers={"X-API-Key": "YOUR_KEY"},
+              params={"lat": 37.7749, "lon": -122.4194, "limit": 3}
+          )
+      - lang: JavaScript
+        source: |
+          const resp = await fetch(
+            "https://geosearch.dev/v1/postal-codes/nearest?lat=37.7749&lon=-122.4194&limit=3",
+            { headers: { "X-API-Key": "YOUR_KEY" } }
+          );
+  /v1/timezones:
+    get:
+      description: Returns a paginated list of timezones with optional filtering by
+        country.
+      operationId: listTimezones
+      parameters:
+      - $ref: "#/components/parameters/lang"
+      - description: Filter by ISO alpha-2 country code
+        example: US
+        explode: true
+        in: query
+        name: country
+        required: false
+        schema:
+          type: string
+        style: form
+      - $ref: "#/components/parameters/cursor"
+      - $ref: "#/components/parameters/limit"
+      - $ref: "#/components/parameters/fields"
+      - description: "Sort field. Allowed: timezone_id, gmt_offset, country_code."
+        example: gmt_offset
+        explode: true
+        in: query
+        name: sort
+        required: false
+        schema:
+          type: string
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimezoneListResponse"
+          description: List of timezones
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: List timezones
+      tags:
+      - Timezones
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" \
+            "https://geosearch.dev/v1/timezones?country=US"
+      - lang: Go
+        source: |
+          req, _ := http.NewRequest("GET", "https://geosearch.dev/v1/timezones?country=US", nil)
+          req.Header.Set("X-API-Key", "YOUR_KEY")
+          resp, err := http.DefaultClient.Do(req)
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/timezones",
+              headers={"X-API-Key": "YOUR_KEY"},
+              params={"country": "US"}
+          )
+      - lang: JavaScript
+        source: |
+          const resp = await fetch(
+            "https://geosearch.dev/v1/timezones?country=US",
+            { headers: { "X-API-Key": "YOUR_KEY" } }
+          );
+  /v1/timezones/{tzId}:
+    get:
+      description: |
+        Returns a single timezone by its IANA identifier.
+        Note: IANA timezone IDs contain slashes (e.g., America/New_York),
+        so the path uses a wildcard match.
+      operationId: getTimezone
+      parameters:
+      - description: "IANA timezone ID (e.g., America/New_York)"
+        example: America/New_York
+        explode: false
+        in: path
+        name: tzId
+        required: true
+        schema:
+          type: string
+        style: simple
+      - $ref: "#/components/parameters/lang"
+      - $ref: "#/components/parameters/fields"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimezoneSingleResponse"
+          description: Timezone details
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: Get timezone by IANA ID
+      tags:
+      - Timezones
+      x-codeSamples:
+      - lang: curl
+        source: "curl -H \"X-API-Key: YOUR_KEY\" https://geosearch.dev/v1/timezones/America/New_York"
+      - lang: Go
+        source: |
+          req, _ := http.NewRequest("GET",
+            "https://geosearch.dev/v1/timezones/America/New_York", nil)
+          req.Header.Set("X-API-Key", "YOUR_KEY")
+          resp, err := http.DefaultClient.Do(req)
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/timezones/America/New_York",
+              headers={"X-API-Key": "YOUR_KEY"}
+          )
+      - lang: JavaScript
+        source: |
+          const resp = await fetch(
+            "https://geosearch.dev/v1/timezones/America/New_York",
+            { headers: { "X-API-Key": "YOUR_KEY" } }
+          );
+  /v1/ip/{address}:
+    get:
+      description: Returns geolocation data for a given IPv4 or IPv6 address.
+      operationId: lookupIP
+      parameters:
+      - description: IPv4 or IPv6 address
+        example: 8.8.8.8
+        explode: false
+        in: path
+        name: address
+        required: true
+        schema:
+          type: string
+        style: simple
+      - $ref: "#/components/parameters/lang"
+      - $ref: "#/components/parameters/fields"
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                data:
+                  ip: 8.8.8.8
+                  continent:
+                    code: NA
+                    name: North America
+                  country:
+                    iso_code: US
+                    name: United States
+                    is_in_european_union: false
+                  region:
+                    iso_code: CA
+                    name: California
+                  city:
+                    name: Mountain View
+                  postal:
+                    code: "94043"
+                  location:
+                    latitude: 37.386
+                    longitude: -122.0838
+                    accuracy_radius: 1000
+                    timezone: America/Los_Angeles
+                  is_anonymous_proxy: false
+                  is_satellite_provider: false
+              schema:
+                $ref: "#/components/schemas/IPSingleResponse"
+          description: IP geolocation result
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          content:
+            application/json:
+              example:
+                error:
+                  code: invalid_parameter
+                  message: invalid IP address format
+                  request_id: req_abc123
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Invalid IP address format
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: IP geolocation lookup
+      tags:
+      - IP Geolocation
+      x-codeSamples:
+      - lang: curl
+        source: "curl -H \"X-API-Key: YOUR_KEY\" https://geosearch.dev/v1/ip/8.8.8.8"
+      - lang: Go
+        source: |
+          req, _ := http.NewRequest("GET", "https://geosearch.dev/v1/ip/8.8.8.8", nil)
+          req.Header.Set("X-API-Key", "YOUR_KEY")
+          resp, err := http.DefaultClient.Do(req)
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/ip/8.8.8.8",
+              headers={"X-API-Key": "YOUR_KEY"}
+          )
+      - lang: JavaScript
+        source: |
+          const resp = await fetch(
+            "https://geosearch.dev/v1/ip/8.8.8.8",
+            { headers: { "X-API-Key": "YOUR_KEY" } }
+          );
+  /v1/ip/me:
+    get:
+      description: |
+        Auto-detects the client's IP address (from X-Forwarded-For or RemoteAddr)
+        and returns its geolocation data.
+      operationId: lookupMyIP
+      parameters:
+      - $ref: "#/components/parameters/lang"
+      - $ref: "#/components/parameters/fields"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IPSingleResponse"
+          description: Caller's IP geolocation result
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: Caller's IP geolocation
+      tags:
+      - IP Geolocation
+      x-codeSamples:
+      - lang: curl
+        source: "curl -H \"X-API-Key: YOUR_KEY\" https://geosearch.dev/v1/ip/me"
+      - lang: Go
+        source: |
+          req, _ := http.NewRequest("GET", "https://geosearch.dev/v1/ip/me", nil)
+          req.Header.Set("X-API-Key", "YOUR_KEY")
+          resp, err := http.DefaultClient.Do(req)
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/ip/me",
+              headers={"X-API-Key": "YOUR_KEY"}
+          )
+      - lang: JavaScript
+        source: |
+          const resp = await fetch(
+            "https://geosearch.dev/v1/ip/me",
+            { headers: { "X-API-Key": "YOUR_KEY" } }
+          );
+  /v1/countries/{code}/neighbors:
+    get:
+      description: Returns countries that share a border with the specified country.
+      operationId: countryNeighbors
+      parameters:
+      - description: ISO alpha-2 country code
+        example: DE
+        explode: false
+        in: path
+        name: code
+        required: true
+        schema:
+          maxLength: 2
+          minLength: 2
+          type: string
+        style: simple
+      - $ref: "#/components/parameters/lang"
+      - $ref: "#/components/parameters/fields"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CountryListResponse"
+          description: List of neighboring countries
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: List neighboring countries
+      tags:
+      - Countries
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" \
+            "https://geosearch.dev/v1/countries/DE/neighbors"
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/countries/DE/neighbors",
+              headers={"X-API-Key": "YOUR_KEY"}
+          )
+  /v1/regions/{id}/children:
+    get:
+      description: Returns all cities that are direct children of the specified region
+        in the administrative hierarchy.
+      operationId: regionChildren
+      parameters:
+      - description: Region ID
+        example: 5332921
+        explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          format: int64
+          type: integer
+        style: simple
+      - $ref: "#/components/parameters/lang"
+      - $ref: "#/components/parameters/fields"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CityListResponse"
+          description: List of child cities
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: List child cities of a region
+      tags:
+      - Regions
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" \
+            "https://geosearch.dev/v1/regions/5332921/children"
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/regions/5332921/children",
+              headers={"X-API-Key": "YOUR_KEY"}
+          )
+  /v1/cities/{id}/hierarchy:
+    get:
+      description: |
+        Returns the full administrative hierarchy for a city, ordered from
+        the city itself up through region, country, and continent.
+      operationId: cityHierarchy
+      parameters:
+      - description: City ID
+        example: 5391959
+        explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          format: int64
+          type: integer
+        style: simple
+      - $ref: "#/components/parameters/lang"
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                data:
+                - geoname_id: 5391959
+                  name: San Francisco
+                  type: city
+                  depth: 0
+                - geoname_id: 5332921
+                  name: California
+                  type: region
+                  depth: 1
+                - geoname_id: 6252001
+                  name: United States
+                  type: country
+                  depth: 2
+                - geoname_id: 6255149
+                  name: North America
+                  type: continent
+                  depth: 3
+                meta:
+                  count: 4
+              schema:
+                $ref: "#/components/schemas/HierarchyListResponse"
+          description: Administrative hierarchy
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: Get administrative hierarchy for a city
+      tags:
+      - Cities
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" \
+            "https://geosearch.dev/v1/cities/5391959/hierarchy"
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/cities/5391959/hierarchy",
+              headers={"X-API-Key": "YOUR_KEY"}
+          )
+  /v1/batch/cities:
+    post:
+      description: Returns multiple cities in a single request. Maximum 50 IDs per
+        request.
+      operationId: batchCities
+      parameters:
+      - $ref: "#/components/parameters/lang"
+      - $ref: "#/components/parameters/fields"
+      requestBody:
+        content:
+          application/json:
+            example:
+              ids:
+              - 5391959
+              - 5128581
+              - 4887398
+            schema:
+              $ref: "#/components/schemas/BatchRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CityListResponse"
+          description: Batch city results
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: Batch lookup cities by IDs
+      tags:
+      - Batch
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST -H "X-API-Key: YOUR_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"ids": [5391959, 5128581]}' \
+            "https://geosearch.dev/v1/batch/cities"
+      - lang: Python
+        source: |
+          import requests
+          r = requests.post(
+              "https://geosearch.dev/v1/batch/cities",
+              headers={"X-API-Key": "YOUR_KEY"},
+              json={"ids": [5391959, 5128581]}
+          )
+  /v1/batch/countries:
+    post:
+      description: Returns multiple countries in a single request. Maximum 50 IDs
+        per request.
+      operationId: batchCountries
+      parameters:
+      - $ref: "#/components/parameters/lang"
+      - $ref: "#/components/parameters/fields"
+      requestBody:
+        content:
+          application/json:
+            example:
+              ids:
+              - 6252001
+              - 2635167
+              - 2921044
+            schema:
+              $ref: "#/components/schemas/BatchRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CountryListResponse"
+          description: Batch country results
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: Batch lookup countries by IDs
+      tags:
+      - Batch
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST -H "X-API-Key: YOUR_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"ids": [6252001, 2635167]}' \
+            "https://geosearch.dev/v1/batch/countries"
+      - lang: Python
+        source: |
+          import requests
+          r = requests.post(
+              "https://geosearch.dev/v1/batch/countries",
+              headers={"X-API-Key": "YOUR_KEY"},
+              json={"ids": [6252001, 2635167]}
+          )
+  /v1/batch/regions:
+    post:
+      description: Returns multiple regions in a single request. Maximum 50 IDs per
+        request.
+      operationId: batchRegions
+      parameters:
+      - $ref: "#/components/parameters/lang"
+      - $ref: "#/components/parameters/fields"
+      requestBody:
+        content:
+          application/json:
+            example:
+              ids:
+              - 5332921
+              - 5128638
+              - 4862182
+            schema:
+              $ref: "#/components/schemas/BatchRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegionListResponse"
+          description: Batch region results
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: Batch lookup regions by IDs
+      tags:
+      - Batch
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST -H "X-API-Key: YOUR_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"ids": [5332921, 5128638]}' \
+            "https://geosearch.dev/v1/batch/regions"
+      - lang: Python
+        source: |
+          import requests
+          r = requests.post(
+              "https://geosearch.dev/v1/batch/regions",
+              headers={"X-API-Key": "YOUR_KEY"},
+              json={"ids": [5332921, 5128638]}
+          )
+  /v1/autocomplete:
+    get:
+      description: |
+        Returns autocomplete suggestions matching a query string across cities, regions, and countries.
+        Results are ranked by relevance and population. Minimum 2 characters required.
+      operationId: autocomplete
+      parameters:
+      - description: Search query (minimum 2 characters)
+        example: San Fran
+        explode: true
+        in: query
+        name: q
+        required: true
+        schema:
+          minLength: 2
+          type: string
+        style: form
+      - $ref: "#/components/parameters/lang"
+      - description: "Maximum results to return (1-25, default 10)"
+        example: 10
+        explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 10
+          maximum: 25
+          minimum: 1
+          type: integer
+        style: form
+      - $ref: "#/components/parameters/fields"
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                data:
+                - id: 5391959
+                  name: San Francisco
+                  type: city
+                  country_code: US
+                  population: 873965
+                meta:
+                  count: 1
+              schema:
+                $ref: "#/components/schemas/AutocompleteListResponse"
+          description: Autocomplete suggestions
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: Autocomplete search
+      tags:
+      - Search
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" \
+            "https://geosearch.dev/v1/autocomplete?q=San+Fran&limit=10"
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/autocomplete",
+              headers={"X-API-Key": "YOUR_KEY"},
+              params={"q": "San Fran", "limit": 10}
+          )
+  /v1/cities/nearby:
+    get:
+      description: |
+        Returns cities near a given latitude/longitude within a specified radius.
+        Results are ordered by distance. Uses PostGIS spatial index for fast lookups.
+      operationId: nearbyCities
+      parameters:
+      - description: Latitude (-90 to 90)
+        example: 37.7749
+        explode: true
+        in: query
+        name: lat
+        required: true
+        schema:
+          format: double
+          maximum: 90
+          minimum: -90
+          type: number
+        style: form
+      - description: Longitude (-180 to 180)
+        example: -122.4194
+        explode: true
+        in: query
+        name: lon
+        required: true
+        schema:
+          format: double
+          maximum: 180
+          minimum: -180
+          type: number
+        style: form
+      - description: "Search radius in kilometers (default 50, max 200)"
+        example: 50
+        explode: true
+        in: query
+        name: radius
+        required: false
+        schema:
+          default: 50
+          format: double
+          maximum: 200
+          minimum: 0
+          type: number
+        style: form
+      - description: "Maximum results to return (1-250, default 10)"
+        example: 10
+        explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 10
+          maximum: 250
+          minimum: 1
+          type: integer
+        style: form
+      - $ref: "#/components/parameters/fields"
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                data:
+                - id: 5391959
+                  name: San Francisco
+                  country_code: US
+                  population: 873965
+                  timezone: America/Los_Angeles
+                  latitude: 37.77493
+                  longitude: -122.41942
+                  distance_km: 0.5
+                meta:
+                  count: 1
+              schema:
+                $ref: "#/components/schemas/NearbyCityListResponse"
+          description: Nearby cities with distance
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: Find nearby cities
+      tags:
+      - Cities
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" \
+            "https://geosearch.dev/v1/cities/nearby?lat=37.7749&lon=-122.4194&radius=50"
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/cities/nearby",
+              headers={"X-API-Key": "YOUR_KEY"},
+              params={"lat": 37.7749, "lon": -122.4194, "radius": 50}
+          )
+  /v1/reverse:
+    get:
+      description: |
+        Returns the nearest city for a given latitude/longitude.
+        Uses PostGIS spatial index for fast reverse geocoding.
+      operationId: reverseGeocode
+      parameters:
+      - description: Latitude (-90 to 90)
+        example: 37.7749
+        explode: true
+        in: query
+        name: lat
+        required: true
+        schema:
+          format: double
+          maximum: 90
+          minimum: -90
+          type: number
+        style: form
+      - description: Longitude (-180 to 180)
+        example: -122.4194
+        explode: true
+        in: query
+        name: lon
+        required: true
+        schema:
+          format: double
+          maximum: 180
+          minimum: -180
+          type: number
+        style: form
+      - $ref: "#/components/parameters/fields"
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                data:
+                  city:
+                    id: 5391959
+                    name: San Francisco
+                    country_code: US
+                    population: 873965
+                    timezone: America/Los_Angeles
+                    latitude: 37.77493
+                    longitude: -122.41942
+                    distance_km: 0.3
+                  distance_km: 0.3
+              schema:
+                $ref: "#/components/schemas/ReverseGeocodeSingleResponse"
+          description: Reverse geocoding result
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: Reverse geocode coordinates
+      tags:
+      - Search
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" \
+            "https://geosearch.dev/v1/reverse?lat=37.7749&lon=-122.4194"
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/reverse",
+              headers={"X-API-Key": "YOUR_KEY"},
+              params={"lat": 37.7749, "lon": -122.4194}
+          )
+  /v1/resolve:
+    get:
+      description: |
+        Returns the administrative areas whose BOUNDARY POLYGONS CONTAIN the
+        given coordinate, ordered country first.
+
+        ## How this differs from `/v1/reverse`
+
+        These two endpoints take the same parameters and answer different
+        questions, and the difference is the reason both exist.
+
+        `/v1/reverse` returns the NEAREST city. It always returns something, and
+        for a point near a border that something is sometimes in the
+        neighbouring country.
+
+        `/v1/resolve` returns the areas that actually CONTAIN the point. It is
+        never wrong about which country a point is in — and it sometimes returns
+        nothing at all, because no polygon covers the point or because we hold no
+        polygon for that country. Choose this endpoint when correctness at
+        borders matters and choose `/v1/reverse` when you always need an answer.
+
+        ## `depth` RUNS THE OPPOSITE DIRECTION FROM `/v1/cities/{id}/hierarchy`
+
+        Read this before writing code that consumes both endpoints.
+
+        Both return the same node SHAPE — `geoname_id`, `name`, `type`, `depth`
+        — so one rendering path can accept either. The `depth` SEMANTICS are
+        inverted between them:
+
+        - On **this** endpoint `depth` is POSITIONAL, counting outward-in from
+          the largest area: **`depth: 0` is the COUNTRY**, `depth: 1` is the
+          region inside it, and so on.
+        - On **`/v1/cities/{id}/hierarchy`** `depth` counts up from the entity
+          that was asked about: `depth: 0` is the CITY, and the country is at the
+          highest depth in the list.
+
+        So `data[0]` is the country here and the city there. Code that sorts or
+        indexes on `depth` across both endpoints without accounting for this will
+        silently invert the hierarchy rather than fail.
+
+        ## Cost and availability
+
+        One quota unit, on every plan including Free. This is a single indexed
+        point-in-polygon probe returning names, not a geometry transfer, so it
+        carries no premium and no tier gate.
+
+        `?fields=` IS NOT SUPPORTED on this endpoint and is ignored if sent.
+        The four node fields are all small, so selection would save nothing.
+      operationId: resolveCoordinate
+      parameters:
+      - description: "Latitude (-90 to 90). Must be a finite number: `NaN` and `Infinity`\
+          \ are rejected with a 400 rather than being passed to the spatial index,\
+          \ which would answer them with an ordinary \"not found\"."
+        example: 37.7749
+        explode: true
+        in: query
+        name: lat
+        required: true
+        schema:
+          format: double
+          maximum: 90
+          minimum: -90
+          type: number
+        style: form
+      - description: Longitude (-180 to 180). Must be a finite number; see `lat`.
+        example: -122.4194
+        explode: true
+        in: query
+        name: lon
+        required: true
+        schema:
+          format: double
+          maximum: 180
+          minimum: -180
+          type: number
+        style: form
+      - $ref: "#/components/parameters/lang"
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                data:
+                - geoname_id: 6252001
+                  name: United States
+                  type: country
+                  depth: 0
+                - geoname_id: 5332921
+                  name: California
+                  type: region
+                  depth: 1
+                meta:
+                  count: 2
+              schema:
+                $ref: "#/components/schemas/HierarchyListResponse"
+          description: |-
+            The administrative chain covering the coordinate, country first.
+
+            A ONE-ELEMENT RESPONSE IS A NORMAL SUCCESS, not a degraded answer: 3.8% of the corpus resolves to a country with no covering region. Do not treat a short chain as an error.
+        "400":
+          content:
+            application/json:
+              example:
+                error:
+                  code: bad_request
+                  message: lat must be between -90 and 90
+                  request_id: req_abc123
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: |-
+            A missing, unparseable, non-finite or out-of-range `lat` or `lon`.
+
+            NOTE THE STATUS. Parameter failures on THIS endpoint are 400 `bad_request`, mirroring `/v1/reverse`, whose parameter contract this endpoint deliberately copies so that the generated SDK method reads `resolve(lat, lon)` beside `reverse(lat, lon)`. That is a different convention from `?simplify=` on `/v1/boundaries/{geoname_id}`, which is a 422 `validation_error` with per-field `error.details`. The two are separate conventions on purpose, not an inconsistency to be harmonised away — treat them as two shapes when writing a client.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ResolveNotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/ResolveQueryTimeout"
+      summary: Resolve coordinates to their containing administrative areas
+      tags:
+      - Search
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" \
+            "https://geosearch.dev/v1/resolve?lat=37.7749&lon=-122.4194"
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/resolve",
+              headers={"X-API-Key": "YOUR_KEY"},
+              params={"lat": 37.7749, "lon": -122.4194}
+          )
+  /v1/boundaries/{geoname_id}:
+    get:
+      description: |
+        Returns the boundary polygon for one country or region as a bare GeoJSON
+        geometry.
+
+        ## COSTS 5 QUOTA UNITS
+
+        This endpoint charges five units against the monthly quota, not one. The
+        premium is priced on PAYLOAD rather than on query time: country GeoJSON
+        averages 62.6 KB and reaches 1.9 MB, and region GeoJSON reaches 2.8 MB —
+        two to three orders of magnitude above an ordinary list response.
+
+        `?simplify=` does NOT reduce the cost. It trades server CPU for client
+        bytes (simplification measures 209–248 ms against 10.3 ms for the plain
+        fetch), so the route is expensive to serve either way.
+
+        REJECTIONS COST ONE UNIT, NOT FIVE. A 400, a 422, either 404 and the 403
+        below all charge the standard single unit, so probing which ids are
+        fetchable — and bouncing off the paywall — is not billed at the premium
+        rate. Only a request that actually reaches the polygon fetch is charged
+        five, including one that reaches it and then times out.
+
+        ## Plan requirements
+
+        REGION boundaries require a paid plan. COUNTRY boundaries are available
+        on every plan, including Free. A Free key requesting a region boundary
+        receives a 403 `tier_upgrade_required` carrying an upgrade link — a
+        visible refusal, not a silent omission.
+
+        This is the same split the `geometry` field follows on the country and
+        region endpoints, with one deliberate difference: there the field is
+        simply absent from a 200, while here the refusal is explicit and tells
+        you what to do about it.
+
+        ## Response shape
+
+        `data.geometry` is a BARE GeoJSON geometry — the `{"type": ...,
+        "coordinates": ...}` object — and NOT a GeoJSON `Feature`. There is no
+        `properties` wrapper; the three sibling fields carry that information.
+        This matches the geometry `/v1/countries/{code}` and `/v1/regions/{id}`
+        already return.
+
+        `type` is `Polygon` OR `MultiPolygon`. Do not pin it: applying
+        `?simplify=` can collapse a MultiPolygon into a Polygon for areas whose
+        smaller parts disappear at the requested tolerance.
+
+        `?fields=` IS NOT SUPPORTED on this endpoint and is ignored if sent.
+        Field selection here works by serialising the whole object and then
+        dropping keys, so `?fields=name` on a 1.9 MB polygon would build the
+        polygon in full and discard it — strictly more expensive than not
+        sending the parameter. Callers who want only the name should use
+        `/v1/countries/{code}` or `/v1/regions/{id}`.
+      operationId: getBoundary
+      parameters:
+      - description: "GeoNames id of a country or a region. A city id — or any id\
+          \ that does not name an area — is a 404 `area_not_an_area`, not a 400."
+        example: 6252001
+        explode: false
+        in: path
+        name: geoname_id
+        required: true
+        schema:
+          format: int64
+          type: integer
+        style: simple
+      - description: |-
+          Douglas-Peucker tolerance in EPSG:4326 DEGREES, applied before the polygon is serialised. Omit it for full precision.
+
+          DEGREES, NOT METRES. The upper bound of 10 is roughly 1,100 km, chosen to make the unit obviously wrong to anyone who typed a value in metres. Simplification stops changing the shape above about 1 degree, so values beyond that buy nothing.
+
+          `0` is accepted and is a no-op: the response reports `simplify: null`, because no tolerance was actually applied.
+
+          A negative, non-finite or out-of-range value is a 422, never a 500.
+
+          SUPPLY IT AT MOST ONCE. `?simplify=0.01&simplify=0.5` is a 422 rather than a request served with one of the two values silently dropped: two tolerances are two conflicting instructions, and the server does not guess which was meant.
+        example: 0.01
+        explode: true
+        in: query
+        name: simplify
+        required: false
+        schema:
+          format: double
+          maximum: 10
+          minimum: 0
+          type: number
+        style: form
+      - $ref: "#/components/parameters/lang"
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                data:
+                  geoname_id: 6252001
+                  name: United States
+                  type: country
+                  geometry:
+                    type: MultiPolygon
+                    coordinates:
+                    - - - - -124.7
+                          - 48.4
+                        - - -124.6
+                          - 48.4
+                        - - -124.6
+                          - 48.3
+                        - - -124.7
+                          - 48.4
+                  simplify: null
+              schema:
+                $ref: "#/components/schemas/BoundarySingleResponse"
+          description: The area's boundary polygon.
+        "400":
+          content:
+            application/json:
+              example:
+                error:
+                  code: bad_request
+                  message: invalid boundary geoname_id
+                  request_id: req_abc123
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: "The path segment is not an integer. A malformed id is a 400\
+            \ rather than a 404, so a typo is distinguishable from a coverage gap."
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/TierUpgradeRequired"
+        "404":
+          $ref: "#/components/responses/BoundaryNotFound"
+        "422":
+          content:
+            application/json:
+              example:
+                error:
+                  code: validation_error
+                  message: Validation failed
+                  details:
+                  - field: simplify
+                    issue: "must not be negative; a tolerance is a distance, and PostGIS\
+                      \ refuses a negative one"
+                  request_id: req_abc123
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: |-
+            `simplify` was malformed. `error.details` names the field and what was wrong with it.
+
+            A 422 HERE, WHERE `/v1/resolve` USES 400 FOR ITS COORDINATES. That is deliberate: this is a shape failure decidable from the request text alone and it has a field name to report, which is this API's 422 convention. The two endpoints follow two conventions; see the 400 on `/v1/resolve`.
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/BoundaryQueryTimeout"
+      summary: Fetch an area's boundary polygon as GeoJSON
+      tags:
+      - Boundaries
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" \
+            "https://geosearch.dev/v1/boundaries/6252001"
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/boundaries/6252001",
+              headers={"X-API-Key": "YOUR_KEY"},
+              params={"simplify": 0.01}
+          )
+  /v1/search:
+    get:
+      description: |
+        Performs a fuzzy text search across countries, regions, and cities using trigram matching.
+        Results are ranked by relevance and population. Uses simple limit pagination (no cursor).
+      operationId: search
+      parameters:
+      - $ref: "#/components/parameters/lang"
+      - description: Search query (minimum 2 characters)
+        example: San Fran
+        explode: true
+        in: query
+        name: q
+        required: true
+        schema:
+          minLength: 2
+          type: string
+        style: form
+      - description: "Filter by entity type (comma-separated). Allowed: country, region,\
+          \ city."
+        example: city
+        explode: true
+        in: query
+        name: type
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: "Maximum results to return (1-100, default 25)"
+        example: 10
+        explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 25
+          maximum: 100
+          minimum: 1
+          type: integer
+        style: form
+      - $ref: "#/components/parameters/fields"
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                data:
+                - type: city
+                  id: 5391959
+                  name: San Francisco
+                  rank: 0.95
+                  country: US
+                  population: 873965
+                  latitude: 37.77493
+                  longitude: -122.41942
+                meta:
+                  has_next: false
+                  has_prev: false
+                  count: 1
+              schema:
+                $ref: "#/components/schemas/SearchListResponse"
+          description: Search results
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: Cross-type search
+      tags:
+      - Search
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" \
+            "https://geosearch.dev/v1/search?q=San+Fran&type=city&limit=10"
+      - lang: Go
+        source: |
+          req, _ := http.NewRequest("GET",
+            "https://geosearch.dev/v1/search?q=San+Fran&type=city&limit=10", nil)
+          req.Header.Set("X-API-Key", "YOUR_KEY")
+          resp, err := http.DefaultClient.Do(req)
+      - lang: Python
+        source: |
+          import requests
+          r = requests.get(
+              "https://geosearch.dev/v1/search",
+              headers={"X-API-Key": "YOUR_KEY"},
+              params={"q": "San Fran", "type": "city", "limit": 10}
+          )
+      - lang: JavaScript
+        source: |
+          const resp = await fetch(
+            "https://geosearch.dev/v1/search?q=San+Fran&type=city&limit=10",
+            { headers: { "X-API-Key": "YOUR_KEY" } }
+          );
+components:
+  parameters:
+    cursor:
+      description: Pagination cursor from a previous response
+      example: eyJpZCI6MjV9
+      explode: true
+      in: query
+      name: cursor
+      required: false
+      schema:
+        type: string
+      style: form
+    limit:
+      description: "Number of results per page (1-100, default 25)"
+      example: 25
+      explode: true
+      in: query
+      name: limit
+      required: false
+      schema:
+        default: 25
+        maximum: 100
+        minimum: 1
+        type: integer
+      style: form
+    fields:
+      description: Comma-separated list of fields to include in the response
+      example: "name,population,iso_code"
+      explode: true
+      in: query
+      name: fields
+      required: false
+      schema:
+        type: string
+      style: form
+    continent:
+      description: "Filter by continent code (AF, AN, AS, EU, NA, OC, SA)"
+      example: EU
+      explode: true
+      in: query
+      name: continent
+      required: false
+      schema:
+        enum:
+        - AF
+        - AN
+        - AS
+        - EU
+        - NA
+        - OC
+        - SA
+        type: string
+      style: form
+    lang:
+      description: "ISO 639-1 language code for localized names (e.g., de, fr, ja)"
+      example: de
+      explode: true
+      in: query
+      name: lang
+      required: false
+      schema:
+        maxLength: 5
+        minLength: 2
+        type: string
+      style: form
+    population_min:
+      description: Minimum population filter
+      example: 1000000
+      explode: true
+      in: query
+      name: population_min
+      required: false
+      schema:
+        format: int64
+        type: integer
+      style: form
+    population_max:
+      description: Maximum population filter
+      example: 10000000
+      explode: true
+      in: query
+      name: population_max
+      required: false
+      schema:
+        format: int64
+        type: integer
+      style: form
+    within:
+      description: |-
+        Return only results whose coordinates fall geometrically inside the boundary of the given area, identified by its GeoNames id. Countries and administrative regions are valid areas; a city id is not.
+
+        Accepts exactly one id. A COMMA-SEPARATED LIST IS REJECTED with a 422 naming the limit — a deliberate departure from the comma-separated convention `country` uses, because each value would be a separate polygon intersection. Ask for one area per request.
+
+        COST: a request using this parameter consumes 2 quota units instead of 1, on every plan including Free. Combining it with `bbox` still costs 2, not 3 — the highest multiplier applies rather than the sum, and adding a box makes the query cheaper to serve, so it is never penalised.
+
+        This asks a GEOMETRIC question and can therefore return a different set of cities than `/v1/regions/{id}/cities`, which asks an administrative one. See that endpoint's description for when and why the two disagree.
+
+        Two failures are reported with distinct 400 codes so a typo is distinguishable from a coverage gap: `area_not_an_area` means the id does not name a country or region at all, and `area_no_boundary` means it does but no boundary polygon is available for it yet.
+      example: 6252001
+      explode: true
+      in: query
+      name: within
+      required: false
+      schema:
+        format: int64
+        type: integer
+      style: form
+    bbox:
+      description: |-
+        Return only results inside the bounding box, given as four comma-separated numbers in the order `w,s,e,n` — west longitude, south latitude, east longitude, north latitude.
+
+        Longitudes must be within [-180, 180] and latitudes within [-90, 90].
+
+        A box where WEST IS GREATER THAN EAST wraps the antimeridian and is fully supported: `bbox=170,-20,-170,-10` is a box around Fiji, evaluated as the union of the two halves it spans. Latitude has no equivalent wrap-around meaning, so `s` greater than `n` is a validation error rather than a wrapped box.
+
+        Charged at the standard request cost of 1 unit. Adding it to a `within` query narrows the candidate set before the polygon test and does not raise the charge.
+      example: "-122.6,37.6,-122.2,37.9"
+      explode: true
+      in: query
+      name: bbox
+      required: false
+      schema:
+        pattern: "^-?\\d+(\\.\\d+)?(,-?\\d+(\\.\\d+)?){3}$"
+        type: string
+      style: form
+  responses:
+    BadRequest:
+      content:
+        application/json:
+          example:
+            error:
+              code: validation_error
+              message: Invalid request parameters
+              details:
+              - field: population_min
+                issue: must be a valid integer
+              request_id: req_abc123
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+      description: Invalid request parameters
+    AreaBadRequest:
+      content:
+        application/json:
+          examples:
+            notAnArea:
+              description: "The id names something other than a country or a region\
+                \ — most often a city id, since `within` and the city endpoints both\
+                \ use GeoNames ids — or names nothing at all. Retrying will not help;\
+                \ supply the id of a country or region."
+              summary: The within id is not an area
+              value:
+                error:
+                  code: area_not_an_area
+                  message: "The `within` parameter must be the GeoNames id of a country\
+                    \ or a region, for example within=6252001 for the United States.\
+                    \ The id supplied names something else — a city, for instance\
+                    \ — or names nothing at all."
+                  request_id: req_abc123
+            noBoundary:
+              description: "The id names a real country or region, but no boundary\
+                \ is available for it, so containment cannot be computed. Coverage\
+                \ is strongest for countries and first- and second-level regions and\
+                \ thins out below that. An empty 200 was deliberately NOT used here:\
+                \ it would be indistinguishable from \"no results inside this area\"\
+                , which is a different and far more misleading answer."
+              summary: No boundary polygon is held for that area
+              value:
+                error:
+                  code: area_no_boundary
+                  message: "That area exists, but no boundary polygon is available\
+                    \ for it yet, so containment cannot be computed. Boundary coverage\
+                    \ is strongest for countries and first- and second-level regions;\
+                    \ see the documentation for current coverage."
+                  request_id: req_abc123
+            badRequest:
+              summary: "A malformed cursor, sort or pagination value"
+              value:
+                error:
+                  code: bad_request
+                  message: invalid cursor
+                  request_id: req_abc123
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+      description: "Invalid request. Distinguish the cases by `error.code`: `bad_request`\
+        \ is a malformed cursor, sort or pagination value; `area_not_an_area` means\
+        \ the `within` id does not name a country or region; `area_no_boundary` means\
+        \ it names a real area for which no boundary polygon is available. The last\
+        \ two are separate codes on purpose — one is a mistake the caller can fix,\
+        \ the other is a limit of our data that they cannot."
+    ValidationFailed:
+      content:
+        application/json:
+          examples:
+            multipleAreas:
+              summary: More than one area requested
+              value:
+                error:
+                  code: validation_error
+                  message: Validation failed
+                  details:
+                  - field: within
+                    issue: accepts exactly one geoname_id; comma-separated lists are
+                      not supported
+                  request_id: req_abc123
+            invertedLatitude:
+              summary: A bounding box whose south edge is north of its north edge
+              value:
+                error:
+                  code: validation_error
+                  message: Validation failed
+                  details:
+                  - field: bbox
+                    issue: south latitude must be less than north latitude
+                  request_id: req_abc123
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+      description: One or more query parameters were malformed. `error.details` names
+        each offending field and what was wrong with it.
+    AreaQueryTimeout:
+      content:
+        application/json:
+          example:
+            error:
+              code: area_query_timeout
+              message: "The containment query for that area took too long to complete.\
+                \ This is usually temporary — please retry. If it persists, narrow\
+                \ the query by adding a bbox or additional filters."
+              request_id: req_abc123
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+      description: |-
+        The containment query exceeded the statement timeout that bounds it.
+
+        This is a 503 and NOT a 500, deliberately: the server is healthy and the request was valid — this one query against an unusually large or complex boundary simply ran out of its time budget. It is therefore worth retrying, and worth retrying with a narrower query. Adding `bbox` or further filters alongside `within` reduces the candidate set before the polygon test and is the most effective remedy.
+
+        THIS RESPONSE BELONGS TO THE `within=` ROUTES ONLY. `GET /v1/resolve` and `GET /v1/boundaries/{geoname_id}` have their own 503 components (`ResolveQueryTimeout` and `BoundaryQueryTimeout`) because the remedy above is false on both: neither accepts `bbox` or `within`.
+    ResolveQueryTimeout:
+      content:
+        application/json:
+          example:
+            error:
+              code: area_query_timeout
+              message: The point-in-polygon probe took too long to complete. This
+                is usually temporary — please retry.
+              request_id: req_abc123
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+      description: |-
+        The point-in-polygon probe exceeded the statement timeout that bounds it.
+
+        This is a 503 and NOT a 500, deliberately: the server is healthy and the request was valid — this one probe against an unusually complex set of candidate polygons simply ran out of its time budget. It is worth retrying.
+
+        There is no narrower query to send. This operation takes a single coordinate; there is no `bbox`, no `within` and no filter set to reduce. Retry, and if the failure persists for a particular coordinate, report it — a coordinate that reliably times out is a data problem on our side, not a malformed request on yours.
+    BoundaryQueryTimeout:
+      content:
+        application/json:
+          example:
+            error:
+              code: area_query_timeout
+              message: "Building that boundary polygon took too long to complete.\
+                \ This is usually temporary — please retry, or ask for a coarser polygon\
+                \ with a larger ?simplify= tolerance."
+              request_id: req_abc123
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+      description: |-
+        Building the boundary polygon exceeded the statement timeout that bounds it.
+
+        This is a 503 and NOT a 500, deliberately: the server is healthy and the request was valid — this one polygon is large enough that assembling and serialising it ran out of its time budget. It is worth retrying.
+
+        THE EFFECTIVE REMEDY ON THIS ROUTE IS `simplify`, not `bbox` — this operation has no `bbox` and no `within`. A larger tolerance means fewer vertices to generalise, serialise and transmit, so a request that times out at the full resolution frequently succeeds at `?simplify=0.01`.
+    TierUpgradeRequired:
+      content:
+        application/json:
+          example:
+            error:
+              code: tier_upgrade_required
+              message: Boundary geometry is not included on your current plan. Upgrade
+                to fetch boundary polygons.
+              request_id: req_abc123
+              upgrade:
+                upgrade_url: https://geosearch.dev/dashboard#billing
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+      description: |-
+        The authenticated key's plan does not include the requested feature.
+
+        NOT RETRYABLE, AND THIS MATTERS FOR CLIENT CODE. Generated SDKs and hand-written clients commonly retry 429 with backoff. This is a 403 and must not be routed into that path: no amount of waiting changes the answer, because nothing is exhausted and no window resets. The only resolution is to raise the plan at `error.upgrade.upgrade_url`.
+
+        It carries no `Retry-After` and no `X-RateLimit-*` semantics of its own, which is the machine-readable form of the same statement.
+    BoundaryNotFound:
+      content:
+        application/json:
+          examples:
+            notAnArea:
+              description: "The id names something other than a country or a region\
+                \ — most often a city id, since this path and the city endpoints both\
+                \ use GeoNames ids — or names nothing at all. Retrying will not help."
+              summary: The id is not an area
+              value:
+                error:
+                  code: area_not_an_area
+                  message: "The path segment must be the GeoNames id of a country\
+                    \ or a region. The id supplied names something else — a city,\
+                    \ for instance — or names nothing at all."
+                  request_id: req_abc123
+            noBoundary:
+              summary: No boundary polygon is held for that area
+              value:
+                error:
+                  code: area_no_boundary
+                  message: "That area exists, but we hold no boundary polygon for\
+                    \ it yet. Coverage is strongest for countries and for first- and\
+                    \ second-level regions; see the documentation for the current\
+                    \ coverage map."
+                  request_id: req_abc123
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+      description: |-
+        No boundary can be returned for that id. Distinguish the two cases by `error.code`: `area_not_an_area` means the id does not name a country or a region at all, and `area_no_boundary` means it names a real area for which no boundary polygon is held. One is a mistake the caller can fix; the other is a limit of our data that they cannot.
+
+        `area_no_boundary` is returned REGARDLESS OF PLAN, and is checked before the plan is. A Free key asking about a region we hold no polygon for is told we do not have it, not that an upgrade would produce it — an upgrade would not.
+    ResolveNotFound:
+      content:
+        application/json:
+          example:
+            error:
+              code: not_found
+              message: "administrative area not found: covering these coordinates"
+              request_id: req_abc123
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+      description: |-
+        No administrative area covers the supplied coordinate.
+
+        EXACTLY ONE CODE, AND THE MESSAGE CLAIMS NOTHING ABOUT WHY. Two distinct situations produce this response — the point is in open water, or it is on land we hold no polygon for — and the server genuinely cannot tell them apart. Reporting a confident cause would be wrong a predictable fraction of the time, so it reports neither.
+
+        This is not an exotic path and should be handled as a normal outcome: measured over a random 19,558-city sample, 0.70% of cities resolve to no country polygon at all.
+
+        An empty 200 was rejected: an empty array cannot be told apart from a successful "nothing matched".
+    Unauthorized:
+      content:
+        application/json:
+          examples:
+            missing:
+              summary: No API key was supplied
+              value:
+                error:
+                  code: authentication_required
+                  message: API key required. Get one at /signup
+                  request_id: req_abc123
+            invalid:
+              summary: The supplied API key is not valid
+              value:
+                error:
+                  code: authentication_failed
+                  message: Invalid API key
+                  request_id: req_abc123
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+      description: |-
+        Missing or invalid API key. Distinguish the two cases by `error.code`: `authentication_required` means no key was supplied at all, and `authentication_failed` means a key was supplied and is not valid.
+
+        The distinction is worth branching on, because the remedies differ: the first is "sign up and send a key", the second is "the key you sent is wrong, revoked or mistyped".
+    NotFound:
+      content:
+        application/json:
+          example:
+            error:
+              code: not_found
+              message: The requested resource was not found
+              request_id: req_abc123
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+      description: Resource not found
+    RateLimited:
+      content:
+        application/json:
+          examples:
+            throttle:
+              description: The account exceeded its plan's requests-per-second allowance.
+                Retryable within a second; no `error.quota` object is present.
+              summary: Per-second throttle exceeded
+              value:
+                error:
+                  code: rate_limit_exceeded
+                  message: Rate limit exceeded. Try again later.
+                  request_id: req_abc123
+            quota:
+              description: The account consumed its full monthly allowance. Retrying
+                will not help until `error.quota.resets_at`; the plan must be raised
+                or the period must roll over.
+              summary: Monthly quota exhausted
+              value:
+                error:
+                  code: quota_exceeded
+                  message: "Monthly quota exhausted. You've used 2,000,000 of 2,000,000\
+                    \ requests for the current period, which resets on March 1, 2026.\
+                    \ Upgrade for a higher limit."
+                  request_id: req_abc123
+                  quota:
+                    limit: 2000000
+                    used: 2000000
+                    resets_at: 2026-03-01T00:00:00Z
+                    upgrade_url: https://geosearch.dev/dashboard/billing
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+      description: "Rate limit exceeded. Distinguish the two cases by `error.code`:\
+        \ `rate_limit_exceeded` is the per-second throttle and clears within a second;\
+        \ `quota_exceeded` is the monthly allowance and carries an `error.quota` object\
+        \ describing the limit, the usage, the period end and where to upgrade."
+      headers:
+        X-RateLimit-Limit:
+          description: Requests per second allowed
+          explode: false
+          schema:
+            type: integer
+          style: simple
+        X-RateLimit-Remaining:
+          description: Requests remaining in current window
+          explode: false
+          schema:
+            type: integer
+          style: simple
+        X-RateLimit-Reset:
+          description: "Unix epoch second at which the limit that tripped resets.\
+            \ An absolute timestamp, not a duration. For `rate_limit_exceeded` this\
+            \ is the next per-second window boundary; for `quota_exceeded` it is the\
+            \ end of the monthly quota period and may be weeks away."
+          explode: false
+          schema:
+            format: int64
+            type: integer
+          style: simple
+        Retry-After:
+          description: "Seconds to wait before retrying. Sent on both 429 codes; only\
+            \ its magnitude differs — around a second for the throttle, up to the\
+            \ remainder of the billing period for the quota wall. Floored at 1, so\
+            \ it never instructs a client to retry immediately."
+          explode: false
+          schema:
+            type: integer
+          style: simple
+  schemas:
+    Country:
+      example:
+        postal_code_format: "#####-####"
+        iso3_code: USA
+        capital: Washington
+        currency_name: Dollar
+        languages:
+        - en-US
+        - es-US
+        fips_code: US
+        latitude: 39.76
+        flag_emoji: flag_emoji
+        continent_code: NA
+        neighbours:
+        - CA
+        - MX
+        tld: .us
+        currency_code: USD
+        geoname_id: 6252001
+        population: 331002651
+        postal_code_regex: "^\\d{5}(-\\d{4})?$"
+        phone: "1"
+        area_sq_km: 9833520.0
+        iso_numeric: 840
+        name: United States
+        geometry: ""
+        id: 1
+        iso_code: US
+        longitude: -98.5
+      properties:
+        id:
+          example: 1
+          format: int64
+          type: integer
+        geoname_id:
+          example: 6252001
+          format: int64
+          type: integer
+        iso_code:
+          example: US
+          type: string
+        iso3_code:
+          example: USA
+          type: string
+        iso_numeric:
+          example: 840
+          type: integer
+        fips_code:
+          example: US
+          type: string
+        name:
+          example: United States
+          type: string
+        capital:
+          example: Washington
+          type: string
+        area_sq_km:
+          example: 9833520.0
+          format: double
+          type: number
+        population:
+          example: 331002651
+          format: int64
+          type: integer
+        continent_code:
+          example: NA
+          type: string
+        tld:
+          example: .us
+          type: string
+        currency_code:
+          example: USD
+          type: string
+        currency_name:
+          example: Dollar
+          type: string
+        phone:
+          example: "1"
+          type: string
+        postal_code_format:
+          example: "#####-####"
+          type: string
+        postal_code_regex:
+          example: "^\\d{5}(-\\d{4})?$"
+          type: string
+        languages:
+          example:
+          - en-US
+          - es-US
+          items:
+            type: string
+          type: array
+        neighbours:
+          example:
+          - CA
+          - MX
+          items:
+            type: string
+          type: array
+        latitude:
+          example: 39.76
+          format: double
+          type: number
+        longitude:
+          example: -98.5
+          format: double
+          type: number
+        flag_emoji:
+          type: string
+        geometry:
+          allOf:
+          - $ref: "#/components/schemas/GeoJSONMultiPolygon"
+          description: |-
+            Country boundary. Returned by default on `GET /v1/countries/{code}` and on request via `?fields=geometry` on `GET /v1/countries`.
+
+            NOT TIER-GATED. Country geometry is served on every plan, including Free. Region geometry is gated — see the `Region` schema.
+    Region:
+      example:
+        admin_code: CA
+        country:
+          name: United States
+          iso_code: US
+        level: 1
+        latitude: 36.778
+        geoname_id: 5332921
+        population: 39538223
+        country_code: US
+        parent_geoname_id: 0
+        ascii_name: California
+        name: California
+        geometry: ""
+        id: 5332921
+        longitude: -119.418
+      properties:
+        id:
+          example: 5332921
+          format: int64
+          type: integer
+        geoname_id:
+          example: 5332921
+          format: int64
+          type: integer
+        country_code:
+          example: US
+          type: string
+        admin_code:
+          example: CA
+          type: string
+        name:
+          example: California
+          type: string
+        ascii_name:
+          example: California
+          type: string
+        level:
+          example: 1
+          type: integer
+        parent_geoname_id:
+          format: int64
+          type: integer
+        population:
+          example: 39538223
+          format: int64
+          type: integer
+        latitude:
+          example: 36.778
+          format: double
+          type: number
+        longitude:
+          example: -119.418
+          format: double
+          type: number
+        country:
+          $ref: "#/components/schemas/CountryRef"
+        geometry:
+          allOf:
+          - $ref: "#/components/schemas/GeoJSONMultiPolygon"
+          description: |-
+            Region boundary. Returned by default on `GET /v1/regions/{id}`, and on request via `?fields=geometry` on `GET /v1/regions` and `GET /v1/countries/{code}/regions`.
+
+            REQUIRES A PAID PLAN. On all three of those routes this key is OMITTED ENTIRELY for a Free-tier key — absent, not null, with a 200 status and no error. A client reading `data.geometry.type` unconditionally will fail on a null dereference.
+
+            To be told explicitly rather than silently, request the polygon from `GET /v1/boundaries/{geoname_id}`, which answers a Free key with a 403 and an upgrade link.
+    City:
+      example:
+        admin1_code: CA
+        elevation: 16
+        country:
+          name: United States
+          iso_code: US
+        timezone: America/Los_Angeles
+        latitude: 37.77493
+        geoname_id: 5391959
+        population: 873965
+        country_code: US
+        ascii_name: San Francisco
+        admin2_code: "075"
+        name: San Francisco
+        id: 5391959
+        region:
+          admin_code: CA
+          name: California
+          id: 5332921
+        longitude: -122.41942
+      properties:
+        id:
+          example: 5391959
+          format: int64
+          type: integer
+        geoname_id:
+          example: 5391959
+          format: int64
+          type: integer
+        name:
+          example: San Francisco
+          type: string
+        ascii_name:
+          example: San Francisco
+          type: string
+        country_code:
+          example: US
+          type: string
+        admin1_code:
+          example: CA
+          type: string
+        admin2_code:
+          example: "075"
+          type: string
+        population:
+          example: 873965
+          format: int64
+          type: integer
+        elevation:
+          example: 16
+          type: integer
+        timezone:
+          example: America/Los_Angeles
+          type: string
+        latitude:
+          example: 37.77493
+          format: double
+          type: number
+        longitude:
+          example: -122.41942
+          format: double
+          type: number
+        country:
+          $ref: "#/components/schemas/CountryRef"
+        region:
+          $ref: "#/components/schemas/RegionRef"
+    PostalCode:
+      example:
+        place_name: San Francisco
+        country:
+          name: United States
+          iso_code: US
+        admin_name3: admin_name3
+        latitude: 37.7864
+        accuracy: 4
+        admin_name1: California
+        admin_name2: San Francisco
+        country_code: US
+        admin_code3: admin_code3
+        admin_code2: "075"
+        admin_code1: CA
+        id: 0
+        postal_code: "94105"
+        longitude: -122.3892
+      properties:
+        id:
+          format: int64
+          type: integer
+        country_code:
+          example: US
+          type: string
+        postal_code:
+          example: "94105"
+          type: string
+        place_name:
+          example: San Francisco
+          type: string
+        admin_name1:
+          example: California
+          type: string
+        admin_code1:
+          example: CA
+          type: string
+        admin_name2:
+          example: San Francisco
+          type: string
+        admin_code2:
+          example: "075"
+          type: string
+        admin_name3:
+          type: string
+        admin_code3:
+          type: string
+        latitude:
+          example: 37.7864
+          format: double
+          type: number
+        longitude:
+          example: -122.3892
+          format: double
+          type: number
+        accuracy:
+          example: 4
+          type: integer
+        country:
+          $ref: "#/components/schemas/CountryRef"
+    Timezone:
+      example:
+        dst_offset: -4.0
+        country_code: US
+        timezone_id: America/New_York
+        id: 0
+        gmt_offset: -5.0
+        raw_offset: -5.0
+      properties:
+        id:
+          format: int64
+          type: integer
+        country_code:
+          example: US
+          type: string
+        timezone_id:
+          example: America/New_York
+          type: string
+        gmt_offset:
+          example: -5.0
+          format: double
+          type: number
+        dst_offset:
+          example: -4.0
+          format: double
+          type: number
+        raw_offset:
+          example: -5.0
+          format: double
+          type: number
+    IPResult:
+      example:
+        continent:
+          code: NA
+          name: North America
+        country:
+          name: United States
+          is_in_european_union: false
+          iso_code: US
+        is_anonymous_proxy: false
+        city:
+          name: Mountain View
+        ip: 8.8.8.8
+        location:
+          timezone: America/Los_Angeles
+          latitude: 37.386
+          accuracy_radius: 1000
+          longitude: -122.0838
+        postal:
+          code: "94043"
+        is_satellite_provider: false
+        region:
+          name: California
+          iso_code: CA
+        network: 8.8.8.0/24
+      properties:
+        ip:
+          example: 8.8.8.8
+          type: string
+        network:
+          example: 8.8.8.0/24
+          type: string
+        continent:
+          $ref: "#/components/schemas/IPResult_continent"
+        country:
+          $ref: "#/components/schemas/IPResult_country"
+        region:
+          $ref: "#/components/schemas/IPResult_region"
+        city:
+          $ref: "#/components/schemas/IPResult_city"
+        postal:
+          $ref: "#/components/schemas/IPResult_postal"
+        location:
+          $ref: "#/components/schemas/IPResult_location"
+        is_anonymous_proxy:
+          example: false
+          type: boolean
+        is_satellite_provider:
+          example: false
+          type: boolean
+    SearchResult:
+      example:
+        country: US
+        latitude: 37.77493
+        name: San Francisco
+        rank: 0.95
+        id: 5391959
+        type: city
+        population: 873965
+        longitude: -122.41942
+      properties:
+        type:
+          enum:
+          - country
+          - region
+          - city
+          example: city
+          type: string
+        id:
+          example: 5391959
+          format: int64
+          type: integer
+        name:
+          example: San Francisco
+          type: string
+        rank:
+          example: 0.95
+          format: double
+          type: number
+        country:
+          example: US
+          type: string
+        population:
+          example: 873965
+          format: int64
+          type: integer
+        latitude:
+          example: 37.77493
+          format: double
+          type: number
+        longitude:
+          example: -122.41942
+          format: double
+          type: number
+    CountryRef:
+      example:
+        name: United States
+        iso_code: US
+      properties:
+        iso_code:
+          example: US
+          type: string
+        name:
+          example: United States
+          type: string
+    RegionRef:
+      example:
+        admin_code: CA
+        name: California
+        id: 5332921
+      properties:
+        id:
+          example: 5332921
+          format: int64
+          type: integer
+        name:
+          example: California
+          type: string
+        admin_code:
+          example: CA
+          type: string
+    PaginationMeta:
+      example:
+        prev_cursor: prev_cursor
+        next_cursor: eyJpZCI6MjV9
+        count: 25
+        has_next: true
+        has_prev: false
+      properties:
+        next_cursor:
+          description: Cursor for the next page
+          example: eyJpZCI6MjV9
+          type: string
+        prev_cursor:
+          description: Cursor for the previous page
+          type: string
+        has_next:
+          example: true
+          type: boolean
+        has_prev:
+          example: false
+          type: boolean
+        count:
+          description: Number of items in this response
+          example: 25
+          type: integer
+    ErrorResponse:
+      example:
+        error:
+          trace_id: 4bf92f3577b34da6a3ce929d0e0e4736
+          code: not_found
+          upgrade:
+            upgrade_url: https://geosearch.dev/dashboard#billing
+          quota:
+            resets_at: 2026-03-01T00:00:00Z
+            limit: 2000000
+            used: 2000000
+            upgrade_url: https://geosearch.dev/dashboard/billing
+          details:
+          - field: field
+            issue: issue
+          - field: field
+            issue: issue
+          message: The requested resource was not found
+          request_id: req_abc123
+      properties:
+        error:
+          $ref: "#/components/schemas/ErrorResponse_error"
+    UpgradeDetail:
+      description: |-
+        Structured detail accompanying a `tier_upgrade_required` 403. Present only on that response; absent from every other error body.
+
+        ONE FIELD, DELIBERATELY. It says where to go and claims nothing else. It carries no limit, no usage and no reset instant, because none of those describe a plan that simply does not include the feature — there is no quantity to wait for and nothing resets.
+      example:
+        upgrade_url: https://geosearch.dev/dashboard#billing
+      properties:
+        upgrade_url:
+          description: Absolute URL of the billing page where the plan can be raised.
+            Derived server-side from configuration and never reflected from a request
+            header or parameter.
+          example: https://geosearch.dev/dashboard#billing
+          format: uri
+          type: string
+      required:
+      - upgrade_url
+    QuotaDetail:
+      description: "Structured detail accompanying a `quota_exceeded` 429. Present\
+        \ only on that response; absent from every other error body. It answers, in\
+        \ machine-readable form, what the limit is, how much was used, when it resets,\
+        \ and where to raise it — the same four facts `error.message` repeats in prose\
+        \ for the benefit of log lines and stack traces."
+      example:
+        resets_at: 2026-03-01T00:00:00Z
+        limit: 2000000
+        used: 2000000
+        upgrade_url: https://geosearch.dev/dashboard/billing
+      properties:
+        limit:
+          description: Monthly request allowance for the account's current plan.
+          example: 2000000
+          format: int64
+          type: integer
+        used:
+          description: Requests consumed in the current quota period.
+          example: 2000000
+          format: int64
+          type: integer
+        resets_at:
+          description: "Start of the next quota period, when `used` returns to zero.\
+            \ Matches the `X-RateLimit-Reset` header on the same response, expressed\
+            \ as RFC 3339 rather than an epoch second."
+          example: 2026-03-01T00:00:00Z
+          format: date-time
+          type: string
+        upgrade_url:
+          description: Absolute URL of the billing page where the plan can be raised.
+            Derived server-side from configuration and never reflected from a request
+            header or parameter.
+          example: https://geosearch.dev/dashboard/billing
+          format: uri
+          type: string
+      required:
+      - limit
+      - resets_at
+      - upgrade_url
+      - used
+    CountryListResponse:
+      example:
+        data:
+        - postal_code_format: "#####-####"
+          iso3_code: USA
+          capital: Washington
+          currency_name: Dollar
+          languages:
+          - en-US
+          - es-US
+          fips_code: US
+          latitude: 39.76
+          flag_emoji: flag_emoji
+          continent_code: NA
+          neighbours:
+          - CA
+          - MX
+          tld: .us
+          currency_code: USD
+          geoname_id: 6252001
+          population: 331002651
+          postal_code_regex: "^\\d{5}(-\\d{4})?$"
+          phone: "1"
+          area_sq_km: 9833520.0
+          iso_numeric: 840
+          name: United States
+          geometry: ""
+          id: 1
+          iso_code: US
+          longitude: -98.5
+        - postal_code_format: "#####-####"
+          iso3_code: USA
+          capital: Washington
+          currency_name: Dollar
+          languages:
+          - en-US
+          - es-US
+          fips_code: US
+          latitude: 39.76
+          flag_emoji: flag_emoji
+          continent_code: NA
+          neighbours:
+          - CA
+          - MX
+          tld: .us
+          currency_code: USD
+          geoname_id: 6252001
+          population: 331002651
+          postal_code_regex: "^\\d{5}(-\\d{4})?$"
+          phone: "1"
+          area_sq_km: 9833520.0
+          iso_numeric: 840
+          name: United States
+          geometry: ""
+          id: 1
+          iso_code: US
+          longitude: -98.5
+        meta:
+          prev_cursor: prev_cursor
+          next_cursor: eyJpZCI6MjV9
+          count: 25
+          has_next: true
+          has_prev: false
+      properties:
+        data:
+          items:
+            $ref: "#/components/schemas/Country"
+          type: array
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+    CountrySingleResponse:
+      example:
+        data:
+          postal_code_format: "#####-####"
+          iso3_code: USA
+          capital: Washington
+          currency_name: Dollar
+          languages:
+          - en-US
+          - es-US
+          fips_code: US
+          latitude: 39.76
+          flag_emoji: flag_emoji
+          continent_code: NA
+          neighbours:
+          - CA
+          - MX
+          tld: .us
+          currency_code: USD
+          geoname_id: 6252001
+          population: 331002651
+          postal_code_regex: "^\\d{5}(-\\d{4})?$"
+          phone: "1"
+          area_sq_km: 9833520.0
+          iso_numeric: 840
+          name: United States
+          geometry: ""
+          id: 1
+          iso_code: US
+          longitude: -98.5
+      properties:
+        data:
+          $ref: "#/components/schemas/Country"
+    RegionListResponse:
+      example:
+        data:
+        - admin_code: CA
+          country:
+            name: United States
+            iso_code: US
+          level: 1
+          latitude: 36.778
+          geoname_id: 5332921
+          population: 39538223
+          country_code: US
+          parent_geoname_id: 0
+          ascii_name: California
+          name: California
+          geometry: ""
+          id: 5332921
+          longitude: -119.418
+        - admin_code: CA
+          country:
+            name: United States
+            iso_code: US
+          level: 1
+          latitude: 36.778
+          geoname_id: 5332921
+          population: 39538223
+          country_code: US
+          parent_geoname_id: 0
+          ascii_name: California
+          name: California
+          geometry: ""
+          id: 5332921
+          longitude: -119.418
+        meta:
+          prev_cursor: prev_cursor
+          next_cursor: eyJpZCI6MjV9
+          count: 25
+          has_next: true
+          has_prev: false
+      properties:
+        data:
+          items:
+            $ref: "#/components/schemas/Region"
+          type: array
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+    RegionSingleResponse:
+      example:
+        data:
+          admin_code: CA
+          country:
+            name: United States
+            iso_code: US
+          level: 1
+          latitude: 36.778
+          geoname_id: 5332921
+          population: 39538223
+          country_code: US
+          parent_geoname_id: 0
+          ascii_name: California
+          name: California
+          geometry: ""
+          id: 5332921
+          longitude: -119.418
+      properties:
+        data:
+          $ref: "#/components/schemas/Region"
+    CityListResponse:
+      example:
+        data:
+        - admin1_code: CA
+          elevation: 16
+          country:
+            name: United States
+            iso_code: US
+          timezone: America/Los_Angeles
+          latitude: 37.77493
+          geoname_id: 5391959
+          population: 873965
+          country_code: US
+          ascii_name: San Francisco
+          admin2_code: "075"
+          name: San Francisco
+          id: 5391959
+          region:
+            admin_code: CA
+            name: California
+            id: 5332921
+          longitude: -122.41942
+        - admin1_code: CA
+          elevation: 16
+          country:
+            name: United States
+            iso_code: US
+          timezone: America/Los_Angeles
+          latitude: 37.77493
+          geoname_id: 5391959
+          population: 873965
+          country_code: US
+          ascii_name: San Francisco
+          admin2_code: "075"
+          name: San Francisco
+          id: 5391959
+          region:
+            admin_code: CA
+            name: California
+            id: 5332921
+          longitude: -122.41942
+        meta:
+          prev_cursor: prev_cursor
+          next_cursor: eyJpZCI6MjV9
+          count: 25
+          has_next: true
+          has_prev: false
+      properties:
+        data:
+          items:
+            $ref: "#/components/schemas/City"
+          type: array
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+    CitySingleResponse:
+      example:
+        data:
+          admin1_code: CA
+          elevation: 16
+          country:
+            name: United States
+            iso_code: US
+          timezone: America/Los_Angeles
+          latitude: 37.77493
+          geoname_id: 5391959
+          population: 873965
+          country_code: US
+          ascii_name: San Francisco
+          admin2_code: "075"
+          name: San Francisco
+          id: 5391959
+          region:
+            admin_code: CA
+            name: California
+            id: 5332921
+          longitude: -122.41942
+      properties:
+        data:
+          $ref: "#/components/schemas/City"
+    PostalCodeListResponse:
+      example:
+        data:
+        - place_name: San Francisco
+          country:
+            name: United States
+            iso_code: US
+          admin_name3: admin_name3
+          latitude: 37.7864
+          accuracy: 4
+          admin_name1: California
+          admin_name2: San Francisco
+          country_code: US
+          admin_code3: admin_code3
+          admin_code2: "075"
+          admin_code1: CA
+          id: 0
+          postal_code: "94105"
+          longitude: -122.3892
+        - place_name: San Francisco
+          country:
+            name: United States
+            iso_code: US
+          admin_name3: admin_name3
+          latitude: 37.7864
+          accuracy: 4
+          admin_name1: California
+          admin_name2: San Francisco
+          country_code: US
+          admin_code3: admin_code3
+          admin_code2: "075"
+          admin_code1: CA
+          id: 0
+          postal_code: "94105"
+          longitude: -122.3892
+        meta:
+          prev_cursor: prev_cursor
+          next_cursor: eyJpZCI6MjV9
+          count: 25
+          has_next: true
+          has_prev: false
+      properties:
+        data:
+          items:
+            $ref: "#/components/schemas/PostalCode"
+          type: array
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+    TimezoneListResponse:
+      example:
+        data:
+        - dst_offset: -4.0
+          country_code: US
+          timezone_id: America/New_York
+          id: 0
+          gmt_offset: -5.0
+          raw_offset: -5.0
+        - dst_offset: -4.0
+          country_code: US
+          timezone_id: America/New_York
+          id: 0
+          gmt_offset: -5.0
+          raw_offset: -5.0
+        meta:
+          prev_cursor: prev_cursor
+          next_cursor: eyJpZCI6MjV9
+          count: 25
+          has_next: true
+          has_prev: false
+      properties:
+        data:
+          items:
+            $ref: "#/components/schemas/Timezone"
+          type: array
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+    TimezoneSingleResponse:
+      example:
+        data:
+          dst_offset: -4.0
+          country_code: US
+          timezone_id: America/New_York
+          id: 0
+          gmt_offset: -5.0
+          raw_offset: -5.0
+      properties:
+        data:
+          $ref: "#/components/schemas/Timezone"
+    IPSingleResponse:
+      example:
+        data:
+          continent:
+            code: NA
+            name: North America
+          country:
+            name: United States
+            is_in_european_union: false
+            iso_code: US
+          is_anonymous_proxy: false
+          city:
+            name: Mountain View
+          ip: 8.8.8.8
+          location:
+            timezone: America/Los_Angeles
+            latitude: 37.386
+            accuracy_radius: 1000
+            longitude: -122.0838
+          postal:
+            code: "94043"
+          is_satellite_provider: false
+          region:
+            name: California
+            iso_code: CA
+          network: 8.8.8.0/24
+      properties:
+        data:
+          $ref: "#/components/schemas/IPResult"
+    SearchListResponse:
+      example:
+        data:
+        - country: US
+          latitude: 37.77493
+          name: San Francisco
+          rank: 0.95
+          id: 5391959
+          type: city
+          population: 873965
+          longitude: -122.41942
+        - country: US
+          latitude: 37.77493
+          name: San Francisco
+          rank: 0.95
+          id: 5391959
+          type: city
+          population: 873965
+          longitude: -122.41942
+        meta:
+          prev_cursor: prev_cursor
+          next_cursor: eyJpZCI6MjV9
+          count: 25
+          has_next: true
+          has_prev: false
+      properties:
+        data:
+          items:
+            $ref: "#/components/schemas/SearchResult"
+          type: array
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+    AutocompleteResult:
+      example:
+        country_code: US
+        name: San Francisco
+        id: 5391959
+        type: city
+        population: 873965
+      properties:
+        id:
+          example: 5391959
+          format: int64
+          type: integer
+        name:
+          example: San Francisco
+          type: string
+        type:
+          enum:
+          - country
+          - region
+          - city
+          example: city
+          type: string
+        country_code:
+          example: US
+          type: string
+        population:
+          example: 873965
+          format: int64
+          type: integer
+    AutocompleteListResponse:
+      example:
+        data:
+        - country_code: US
+          name: San Francisco
+          id: 5391959
+          type: city
+          population: 873965
+        - country_code: US
+          name: San Francisco
+          id: 5391959
+          type: city
+          population: 873965
+        meta:
+          prev_cursor: prev_cursor
+          next_cursor: eyJpZCI6MjV9
+          count: 25
+          has_next: true
+          has_prev: false
+      properties:
+        data:
+          items:
+            $ref: "#/components/schemas/AutocompleteResult"
+          type: array
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+    NearbyCity:
+      example:
+        country_code: US
+        country:
+          name: United States
+          iso_code: US
+        distance_km: 12.5
+        timezone: America/Los_Angeles
+        latitude: 37.77493
+        name: San Francisco
+        id: 5391959
+        region:
+          admin_code: CA
+          name: California
+          id: 5332921
+        population: 873965
+        longitude: -122.41942
+      properties:
+        id:
+          example: 5391959
+          format: int64
+          type: integer
+        name:
+          example: San Francisco
+          type: string
+        country_code:
+          example: US
+          type: string
+        population:
+          example: 873965
+          format: int64
+          type: integer
+        timezone:
+          example: America/Los_Angeles
+          type: string
+        latitude:
+          example: 37.77493
+          format: double
+          type: number
+        longitude:
+          example: -122.41942
+          format: double
+          type: number
+        distance_km:
+          example: 12.5
+          format: double
+          type: number
+        country:
+          $ref: "#/components/schemas/CountryRef"
+        region:
+          $ref: "#/components/schemas/RegionRef"
+    NearbyCityListResponse:
+      example:
+        data:
+        - country_code: US
+          country:
+            name: United States
+            iso_code: US
+          distance_km: 12.5
+          timezone: America/Los_Angeles
+          latitude: 37.77493
+          name: San Francisco
+          id: 5391959
+          region:
+            admin_code: CA
+            name: California
+            id: 5332921
+          population: 873965
+          longitude: -122.41942
+        - country_code: US
+          country:
+            name: United States
+            iso_code: US
+          distance_km: 12.5
+          timezone: America/Los_Angeles
+          latitude: 37.77493
+          name: San Francisco
+          id: 5391959
+          region:
+            admin_code: CA
+            name: California
+            id: 5332921
+          population: 873965
+          longitude: -122.41942
+        meta:
+          prev_cursor: prev_cursor
+          next_cursor: eyJpZCI6MjV9
+          count: 25
+          has_next: true
+          has_prev: false
+      properties:
+        data:
+          items:
+            $ref: "#/components/schemas/NearbyCity"
+          type: array
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+    ReverseGeocodeResult:
+      example:
+        distance_km: 0.3
+        city:
+          country_code: US
+          country:
+            name: United States
+            iso_code: US
+          distance_km: 12.5
+          timezone: America/Los_Angeles
+          latitude: 37.77493
+          name: San Francisco
+          id: 5391959
+          region:
+            admin_code: CA
+            name: California
+            id: 5332921
+          population: 873965
+          longitude: -122.41942
+      properties:
+        city:
+          $ref: "#/components/schemas/NearbyCity"
+        distance_km:
+          example: 0.3
+          format: double
+          type: number
+    ReverseGeocodeSingleResponse:
+      example:
+        data:
+          distance_km: 0.3
+          city:
+            country_code: US
+            country:
+              name: United States
+              iso_code: US
+            distance_km: 12.5
+            timezone: America/Los_Angeles
+            latitude: 37.77493
+            name: San Francisco
+            id: 5391959
+            region:
+              admin_code: CA
+              name: California
+              id: 5332921
+            population: 873965
+            longitude: -122.41942
+      properties:
+        data:
+          $ref: "#/components/schemas/ReverseGeocodeResult"
+    HierarchyNode:
+      example:
+        depth: 0
+        name: San Francisco
+        type: city
+        geoname_id: 5391959
+      properties:
+        geoname_id:
+          example: 5391959
+          format: int64
+          type: integer
+        name:
+          example: San Francisco
+          type: string
+        type:
+          enum:
+          - city
+          - region
+          - country
+          - continent
+          example: city
+          type: string
+        depth:
+          description: |-
+            THE DIRECTION DEPENDS ON THE ENDPOINT, because this schema is shared by two operations that number their nodes from opposite ends.
+
+            On `GET /v1/cities/{id}/hierarchy` depth counts UP from the entity asked about: `depth: 0` is the city and the country carries the HIGHEST depth. On `GET /v1/resolve` depth is POSITIONAL, counting outward-in: `depth: 0` is the COUNTRY. Code that sorts or indexes on this field across both endpoints without accounting for the inversion silently REVERSES the hierarchy rather than failing — `max(by: depth)` returns the country on one and the innermost region on the other.
+
+            On `/v1/resolve` depth is the ARRAY INDEX and NOT an administrative level. A chain may skip a level: a measured 3.8% of coordinates resolve to a country plus a level-2 region with no level-1 region, and in those `depth: 1` is a level-2 area. `HierarchyNode` carries no `level` field, so there is no second signal to disambiguate with — treat depth as position only.
+          example: 0
+          type: integer
+    HierarchyListResponse:
+      example:
+        data:
+        - depth: 0
+          name: San Francisco
+          type: city
+          geoname_id: 5391959
+        - depth: 0
+          name: San Francisco
+          type: city
+          geoname_id: 5391959
+        meta:
+          prev_cursor: prev_cursor
+          next_cursor: eyJpZCI6MjV9
+          count: 25
+          has_next: true
+          has_prev: false
+      properties:
+        data:
+          items:
+            $ref: "#/components/schemas/HierarchyNode"
+          type: array
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+    Boundary:
+      description: "One area's boundary polygon, as returned by `GET /v1/boundaries/{geoname_id}`."
+      example:
+        name: United States
+        geometry:
+          coordinates:
+          - ""
+          - ""
+          type: MultiPolygon
+        simplify: 0.8008281904610115
+        type: country
+        geoname_id: 6252001
+      properties:
+        geoname_id:
+          description: "The area the polygon belongs to, read back from the source\
+            \ row rather than echoed from the request."
+          example: 6252001
+          format: int64
+          type: integer
+        name:
+          description: "The area's name, resolved through `?lang=` when supplied."
+          example: United States
+          type: string
+        type:
+          description: Which kind of area this is.
+          enum:
+          - country
+          - region
+          example: country
+          type: string
+        geometry:
+          $ref: "#/components/schemas/GeoJSONGeometry"
+        simplify:
+          description: |-
+            The tolerance that was ACTUALLY APPLIED, or `null` for full precision.
+
+            THIS IS NOT YOUR `?simplify=` ECHOED BACK. A requested tolerance of `0` is dropped rather than executed, so `?simplify=0` returns `null` here — that is the truthful answer, because no simplification was performed. Read this field rather than assuming the request was honoured verbatim.
+          format: double
+          type: number
+          nullable: true
+      required:
+      - geometry
+      - geoname_id
+      - name
+      - simplify
+      - type
+    BoundarySingleResponse:
+      example:
+        data:
+          name: United States
+          geometry:
+            coordinates:
+            - ""
+            - ""
+            type: MultiPolygon
+          simplify: 0.8008281904610115
+          type: country
+          geoname_id: 6252001
+      properties:
+        data:
+          $ref: "#/components/schemas/Boundary"
+    GeoJSONGeometry:
+      description: "A bare GeoJSON geometry — the `{\"type\": ..., \"coordinates\"\
+        : ...}` object itself, NOT a GeoJSON `Feature`. There is no `properties` wrapper."
+      example:
+        coordinates:
+        - ""
+        - ""
+        type: MultiPolygon
+      properties:
+        type:
+          description: "`MultiPolygon` for most areas, `Polygon` for areas with a\
+            \ single ring — including areas that BECOME single-ring under `?simplify=`.\
+            \ Do not pin this to one value."
+          enum:
+          - Polygon
+          - MultiPolygon
+          example: MultiPolygon
+          type: string
+        coordinates:
+          description: "Nesting depth depends on `type`: three levels for `Polygon`,\
+            \ four for `MultiPolygon`. Positions are `[longitude, latitude]` in EPSG:4326,\
+            \ per the GeoJSON specification."
+          items: {}
+          type: array
+      required:
+      - coordinates
+      - type
+    BatchRequest:
+      example:
+        ids:
+        - 5391959
+        - 5128581
+        - 4887398
+      properties:
+        ids:
+          description: Array of entity IDs to look up (max 50)
+          example:
+          - 5391959
+          - 5128581
+          - 4887398
+          items:
+            format: int64
+            type: integer
+          maxItems: 50
+          minItems: 1
+          type: array
+      required:
+      - ids
+    GeoJSONMultiPolygon:
+      description: |-
+        GeoJSON MultiPolygon geometry.
+
+        WHEN IT IS RETURNED DEPENDS ON THE ENDPOINT AND ON THE PLAN, and there is no single rule. The previous wording here — "only returned when explicitly requested via `?fields=geometry`" — was false in both directions and is corrected below.
+
+        `GET /v1/countries/{code}` and `GET /v1/regions/{id}`: returned by default. These are detail endpoints and they have always served geometry without `?fields=geometry` being present.
+
+        `GET /v1/countries`, `GET /v1/regions` and `GET /v1/countries/{code}/regions`: returned only when `?fields=geometry` is requested. Omitting it from a list response is a payload decision — a 100-row page of region polygons is several megabytes.
+
+        REGION GEOMETRY ADDITIONALLY REQUIRES A PAID PLAN. On `GET /v1/regions/{id}`, `GET /v1/regions?fields=geometry` and `GET /v1/countries/{code}/regions?fields=geometry`, the `geometry` key is OMITTED ENTIRELY for Free-tier keys — absent, not null. Country geometry is not gated: `GET /v1/countries/{code}` and `GET /v1/countries?fields=geometry` serve it on every plan, including Free.
+
+        The omission is silent by design: it is not an error, and these endpoints still return 200. A client that reads `data.geometry.type` without checking for the key will fail on a null dereference rather than receive a typed zero. To fetch a boundary polygon explicitly — and to receive a 403 with an upgrade link rather than a silent omission when the plan does not include it — use `GET /v1/boundaries/{geoname_id}`.
+      properties:
+        type:
+          enum:
+          - MultiPolygon
+          type: string
+        coordinates:
+          items:
+            items:
+              items:
+                items:
+                  format: double
+                  type: number
+                type: array
+              type: array
+            type: array
+          type: array
+      nullable: true
+    getStatus_200_response_data:
+      example:
+        database: connected
+        status: healthy
+      properties:
+        status:
+          enum:
+          - healthy
+          - degraded
+          example: healthy
+          type: string
+        database:
+          enum:
+          - connected
+          - disconnected
+          example: connected
+          type: string
+    getStatus_200_response:
+      example:
+        data:
+          database: connected
+          status: healthy
+      properties:
+        data:
+          $ref: "#/components/schemas/getStatus_200_response_data"
+    IPResult_continent:
+      example:
+        code: NA
+        name: North America
+      properties:
+        code:
+          example: NA
+          type: string
+        name:
+          example: North America
+          type: string
+    IPResult_country:
+      example:
+        name: United States
+        is_in_european_union: false
+        iso_code: US
+      properties:
+        iso_code:
+          example: US
+          type: string
+        name:
+          example: United States
+          type: string
+        is_in_european_union:
+          example: false
+          type: boolean
+    IPResult_region:
+      example:
+        name: California
+        iso_code: CA
+      properties:
+        iso_code:
+          example: CA
+          type: string
+        name:
+          example: California
+          type: string
+    IPResult_city:
+      example:
+        name: Mountain View
+      properties:
+        name:
+          example: Mountain View
+          type: string
+    IPResult_postal:
+      example:
+        code: "94043"
+      properties:
+        code:
+          example: "94043"
+          type: string
+    IPResult_location:
+      example:
+        timezone: America/Los_Angeles
+        latitude: 37.386
+        accuracy_radius: 1000
+        longitude: -122.0838
+      properties:
+        latitude:
+          example: 37.386
+          format: double
+          type: number
+        longitude:
+          example: -122.0838
+          format: double
+          type: number
+        accuracy_radius:
+          example: 1000
+          type: integer
+        timezone:
+          example: America/Los_Angeles
+          type: string
+    ErrorResponse_error_details_inner:
+      example:
+        field: field
+        issue: issue
+      properties:
+        field:
+          type: string
+        issue:
+          type: string
+    ErrorResponse_error:
+      example:
+        trace_id: 4bf92f3577b34da6a3ce929d0e0e4736
+        code: not_found
+        upgrade:
+          upgrade_url: https://geosearch.dev/dashboard#billing
+        quota:
+          resets_at: 2026-03-01T00:00:00Z
+          limit: 2000000
+          used: 2000000
+          upgrade_url: https://geosearch.dev/dashboard/billing
+        details:
+        - field: field
+          issue: issue
+        - field: field
+          issue: issue
+        message: The requested resource was not found
+        request_id: req_abc123
+      properties:
+        code:
+          example: not_found
+          type: string
+        message:
+          example: The requested resource was not found
+          type: string
+        details:
+          items:
+            $ref: "#/components/schemas/ErrorResponse_error_details_inner"
+          type: array
+        request_id:
+          description: Correlation identifier present on every error response. Quote
+            this when contacting support.
+          example: req_abc123
+          type: string
+        trace_id:
+          description: "W3C trace ID of the distributed trace for this request, when\
+            \ tracing is enabled. Omitted entirely when no span was recording, so\
+            \ clients must treat it as optional. It complements rather than replaces\
+            \ `request_id`."
+          example: 4bf92f3577b34da6a3ce929d0e0e4736
+          type: string
+        quota:
+          $ref: "#/components/schemas/QuotaDetail"
+        upgrade:
+          $ref: "#/components/schemas/UpgradeDetail"
+      required:
+      - code
+      - message
+      - request_id
+  securitySchemes:
+    apiKeyAuth:
+      description: API key for authentication. Get one at /signup then /dashboard.
+      in: header
+      name: X-API-Key
+      type: apiKey
