@@ -1,4 +1,4 @@
-module github.com/geosearch-dev/geoapi-go
+module github.com/geosearch-dev/geosearch-go
 
 go 1.23
 

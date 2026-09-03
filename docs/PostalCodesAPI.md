@@ -26,7 +26,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	openapiclient "github.com/geosearch-dev/geoapi-go"
+	openapiclient "github.com/geosearch-dev/geosearch-go"
 )
 
 func main() {
@@ -108,7 +108,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	openapiclient "github.com/geosearch-dev/geoapi-go"
+	openapiclient "github.com/geosearch-dev/geosearch-go"
 )
 
 func main() {
