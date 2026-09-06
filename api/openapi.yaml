@@ -42,7 +42,7 @@ info:
   license:
     name: MIT
   title: GeoSearch
-  version: 1.3.0
+  version: 1.3.1
 servers:
 - url: https://geosearch.dev
 security:
@@ -90,21 +90,49 @@ paths:
       summary: Health check
       tags:
       - Health
+      x-quota-cost:
+        base: 1
       x-codeSamples:
       - lang: curl
-        source: curl https://geosearch.dev/v1/status
+        source: |
+          # /v1/status needs no API key; every other endpoint requires -H "X-API-Key: YOUR_KEY"
+          curl https://geosearch.dev/v1/status
       - lang: Go
         source: |
-          resp, err := http.Get("https://geosearch.dev/v1/status")
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          status, _, err := client.HealthAPI.GetStatus(ctx).Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get("https://geosearch.dev/v1/status")
-          print(r.json())
-      - lang: JavaScript
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              status = geosearch.HealthApi(client).get_status().data
+      - lang: TypeScript
         source: |
-          const resp = await fetch("https://geosearch.dev/v1/status");
-          const data = await resp.json();
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, HealthApi } from "@geosearch/client";
+
+          const api = new HealthApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const status = (await api.getStatus()).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          status = GeoSearch::HealthApi.new.get_status.data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $status = (new GeoSearch\Api\HealthApi(null, $cfg))->getStatus()->getData();
   /v1/countries:
     get:
       description: Returns a paginated list of countries with optional filtering and
@@ -168,6 +196,8 @@ paths:
       summary: List countries
       tags:
       - Countries
+      x-quota-cost:
+        base: 1
       x-codeSamples:
       - lang: curl
         source: |
@@ -175,25 +205,41 @@ paths:
             "https://geosearch.dev/v1/countries?continent=EU&limit=10"
       - lang: Go
         source: |
-          req, _ := http.NewRequest("GET", "https://geosearch.dev/v1/countries?continent=EU", nil)
-          req.Header.Set("X-API-Key", "YOUR_KEY")
-          resp, err := http.DefaultClient.Do(req)
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          countries, _, err := client.CountriesAPI.ListCountries(ctx).Continent("EU").Limit(10).Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/countries",
-              headers={"X-API-Key": "YOUR_KEY"},
-              params={"continent": "EU", "limit": 10}
-          )
-          print(r.json())
-      - lang: JavaScript
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              countries = geosearch.CountriesApi(client).list_countries(continent="EU", limit=10).data
+      - lang: TypeScript
         source: |
-          const resp = await fetch(
-            "https://geosearch.dev/v1/countries?continent=EU&limit=10",
-            { headers: { "X-API-Key": "YOUR_KEY" } }
-          );
-          const data = await resp.json();
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, CountriesApi } from "@geosearch/client";
+
+          const api = new CountriesApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const countries = (await api.listCountries({ continent: "EU", limit: 10 })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          countries = GeoSearch::CountriesApi.new.list_countries(continent: "EU", limit: 10).data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $countries = (new GeoSearch\Api\CountriesApi(null, $cfg))->listCountries(null, "EU");
+          // lang, continent shown — the remaining 7 parameters are positional and optional
   /v1/countries/{code}:
     get:
       description: Returns a single country by its ISO alpha-2 code.
@@ -228,27 +274,48 @@ paths:
       summary: Get country by ISO code
       tags:
       - Countries
+      x-quota-cost:
+        base: 1
       x-codeSamples:
       - lang: curl
-        source: "curl -H \"X-API-Key: YOUR_KEY\" https://geosearch.dev/v1/countries/US"
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" https://geosearch.dev/v1/countries/US
       - lang: Go
         source: |
-          req, _ := http.NewRequest("GET", "https://geosearch.dev/v1/countries/US", nil)
-          req.Header.Set("X-API-Key", "YOUR_KEY")
-          resp, err := http.DefaultClient.Do(req)
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          country, _, err := client.CountriesAPI.GetCountry(ctx, "US").Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/countries/US",
-              headers={"X-API-Key": "YOUR_KEY"}
-          )
-      - lang: JavaScript
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              country = geosearch.CountriesApi(client).get_country("US").data
+      - lang: TypeScript
         source: |
-          const resp = await fetch(
-            "https://geosearch.dev/v1/countries/US",
-            { headers: { "X-API-Key": "YOUR_KEY" } }
-          );
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, CountriesApi } from "@geosearch/client";
+
+          const api = new CountriesApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const country = (await api.getCountry({ code: "US" })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          country = GeoSearch::CountriesApi.new.get_country("US").data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $country = (new GeoSearch\Api\CountriesApi(null, $cfg))->getCountry("US")->getData();
   /v1/countries/{code}/regions:
     get:
       description: Returns a paginated list of regions (administrative divisions)
@@ -291,27 +358,48 @@ paths:
       summary: List regions in a country
       tags:
       - Countries
+      x-quota-cost:
+        base: 1
       x-codeSamples:
       - lang: curl
-        source: "curl -H \"X-API-Key: YOUR_KEY\" https://geosearch.dev/v1/countries/US/regions"
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" https://geosearch.dev/v1/countries/US/regions
       - lang: Go
         source: |
-          req, _ := http.NewRequest("GET", "https://geosearch.dev/v1/countries/US/regions", nil)
-          req.Header.Set("X-API-Key", "YOUR_KEY")
-          resp, err := http.DefaultClient.Do(req)
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          regions, _, err := client.CountriesAPI.ListCountryRegions(ctx, "US").Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/countries/US/regions",
-              headers={"X-API-Key": "YOUR_KEY"}
-          )
-      - lang: JavaScript
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              regions = geosearch.CountriesApi(client).list_country_regions("US").data
+      - lang: TypeScript
         source: |
-          const resp = await fetch(
-            "https://geosearch.dev/v1/countries/US/regions",
-            { headers: { "X-API-Key": "YOUR_KEY" } }
-          );
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, CountriesApi } from "@geosearch/client";
+
+          const api = new CountriesApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const regions = (await api.listCountryRegions({ code: "US" })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          regions = GeoSearch::CountriesApi.new.list_country_regions("US").data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $regions = (new GeoSearch\Api\CountriesApi(null, $cfg))->listCountryRegions("US")->getData();
   /v1/regions:
     get:
       description: "Returns a paginated list of regions with optional filtering by\
@@ -367,6 +455,8 @@ paths:
       summary: List regions
       tags:
       - Regions
+      x-quota-cost:
+        base: 1
       x-codeSamples:
       - lang: curl
         source: |
@@ -374,23 +464,41 @@ paths:
             "https://geosearch.dev/v1/regions?country=US&sort=-population"
       - lang: Go
         source: |
-          req, _ := http.NewRequest("GET", "https://geosearch.dev/v1/regions?country=US", nil)
-          req.Header.Set("X-API-Key", "YOUR_KEY")
-          resp, err := http.DefaultClient.Do(req)
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          regions, _, err := client.RegionsAPI.ListRegions(ctx).Country("US").Sort("-population").Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/regions",
-              headers={"X-API-Key": "YOUR_KEY"},
-              params={"country": "US", "sort": "-population"}
-          )
-      - lang: JavaScript
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              regions = geosearch.RegionsApi(client).list_regions(country="US", sort="-population").data
+      - lang: TypeScript
         source: |
-          const resp = await fetch(
-            "https://geosearch.dev/v1/regions?country=US",
-            { headers: { "X-API-Key": "YOUR_KEY" } }
-          );
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, RegionsApi } from "@geosearch/client";
+
+          const api = new RegionsApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const regions = (await api.listRegions({ country: "US", sort: "-population" })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          regions = GeoSearch::RegionsApi.new.list_regions(country: "US", sort: "-population").data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $regions = (new GeoSearch\Api\RegionsApi(null, $cfg))->listRegions(null, "US");
+          // lang, country shown — the remaining 7 parameters are positional and optional
   /v1/regions/{id}:
     get:
       description: Returns a single region by its numeric ID.
@@ -426,27 +534,48 @@ paths:
       summary: Get region by ID
       tags:
       - Regions
+      x-quota-cost:
+        base: 1
       x-codeSamples:
       - lang: curl
-        source: "curl -H \"X-API-Key: YOUR_KEY\" https://geosearch.dev/v1/regions/5332921"
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" https://geosearch.dev/v1/regions/5332921
       - lang: Go
         source: |
-          req, _ := http.NewRequest("GET", "https://geosearch.dev/v1/regions/5332921", nil)
-          req.Header.Set("X-API-Key", "YOUR_KEY")
-          resp, err := http.DefaultClient.Do(req)
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          region, _, err := client.RegionsAPI.GetRegion(ctx, 5332921).Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/regions/5332921",
-              headers={"X-API-Key": "YOUR_KEY"}
-          )
-      - lang: JavaScript
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              region = geosearch.RegionsApi(client).get_region(5332921).data
+      - lang: TypeScript
         source: |
-          const resp = await fetch(
-            "https://geosearch.dev/v1/regions/5332921",
-            { headers: { "X-API-Key": "YOUR_KEY" } }
-          );
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, RegionsApi } from "@geosearch/client";
+
+          const api = new RegionsApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const region = (await api.getRegion({ id: 5332921 })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          region = GeoSearch::RegionsApi.new.get_region(5332921).data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $region = (new GeoSearch\Api\RegionsApi(null, $cfg))->getRegion(5332921)->getData();
   /v1/regions/{id}/cities:
     get:
       description: |-
@@ -496,27 +625,48 @@ paths:
       summary: List cities in a region
       tags:
       - Regions
+      x-quota-cost:
+        base: 1
       x-codeSamples:
       - lang: curl
-        source: "curl -H \"X-API-Key: YOUR_KEY\" https://geosearch.dev/v1/regions/5332921/cities"
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" https://geosearch.dev/v1/regions/5332921/cities
       - lang: Go
         source: |
-          req, _ := http.NewRequest("GET", "https://geosearch.dev/v1/regions/5332921/cities", nil)
-          req.Header.Set("X-API-Key", "YOUR_KEY")
-          resp, err := http.DefaultClient.Do(req)
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          cities, _, err := client.RegionsAPI.ListRegionCities(ctx, 5332921).Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/regions/5332921/cities",
-              headers={"X-API-Key": "YOUR_KEY"}
-          )
-      - lang: JavaScript
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              cities = geosearch.RegionsApi(client).list_region_cities(5332921).data
+      - lang: TypeScript
         source: |
-          const resp = await fetch(
-            "https://geosearch.dev/v1/regions/5332921/cities",
-            { headers: { "X-API-Key": "YOUR_KEY" } }
-          );
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, RegionsApi } from "@geosearch/client";
+
+          const api = new RegionsApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const cities = (await api.listRegionCities({ id: 5332921 })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          cities = GeoSearch::RegionsApi.new.list_region_cities(5332921).data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $cities = (new GeoSearch\Api\RegionsApi(null, $cfg))->listRegionCities(5332921)->getData();
   /v1/cities:
     get:
       description: "Returns a paginated list of cities with optional filtering by\
@@ -631,31 +781,53 @@ paths:
       summary: List cities
       tags:
       - Cities
+      x-quota-cost:
+        base: 1
+        note: 2 with ?within=
       x-codeSamples:
       - lang: curl
         source: |
           curl -H "X-API-Key: YOUR_KEY" \
-            "https://geosearch.dev/v1/cities?country=US&name=San+Fran&limit=10"
+            "https://geosearch.dev/v1/cities?country=US&population_min=100000&limit=10"
       - lang: Go
         source: |
-          req, _ := http.NewRequest("GET",
-            "https://geosearch.dev/v1/cities?country=US&name=San+Fran", nil)
-          req.Header.Set("X-API-Key", "YOUR_KEY")
-          resp, err := http.DefaultClient.Do(req)
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          cities, _, err := client.CitiesAPI.ListCities(ctx).
+              Country("US").PopulationMin(100000).Limit(10).Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/cities",
-              headers={"X-API-Key": "YOUR_KEY"},
-              params={"country": "US", "name": "San Fran", "limit": 10}
-          )
-      - lang: JavaScript
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              cities = geosearch.CitiesApi(client).list_cities(
+                  country="US", population_min=100000, limit=10).data
+      - lang: TypeScript
         source: |
-          const resp = await fetch(
-            "https://geosearch.dev/v1/cities?country=US&name=San+Fran&limit=10",
-            { headers: { "X-API-Key": "YOUR_KEY" } }
-          );
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, CitiesApi } from "@geosearch/client";
+
+          const api = new CitiesApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const cities = (await api.listCities({ country: "US", populationMin: 100000, limit: 10 })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          cities = GeoSearch::CitiesApi.new.list_cities(country: "US", population_min: 100000, limit: 10).data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $cities = (new GeoSearch\Api\CitiesApi(null, $cfg))->listCities(null, "US");
+          // lang, country shown — the remaining 13 parameters are positional and optional
   /v1/cities/{id}:
     get:
       description: Returns a single city by its numeric ID.
@@ -691,27 +863,48 @@ paths:
       summary: Get city by ID
       tags:
       - Cities
+      x-quota-cost:
+        base: 1
       x-codeSamples:
       - lang: curl
-        source: "curl -H \"X-API-Key: YOUR_KEY\" https://geosearch.dev/v1/cities/5391959"
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" https://geosearch.dev/v1/cities/5391959
       - lang: Go
         source: |
-          req, _ := http.NewRequest("GET", "https://geosearch.dev/v1/cities/5391959", nil)
-          req.Header.Set("X-API-Key", "YOUR_KEY")
-          resp, err := http.DefaultClient.Do(req)
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          city, _, err := client.CitiesAPI.GetCity(ctx, 5391959).Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/cities/5391959",
-              headers={"X-API-Key": "YOUR_KEY"}
-          )
-      - lang: JavaScript
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              city = geosearch.CitiesApi(client).get_city(5391959).data
+      - lang: TypeScript
         source: |
-          const resp = await fetch(
-            "https://geosearch.dev/v1/cities/5391959",
-            { headers: { "X-API-Key": "YOUR_KEY" } }
-          );
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, CitiesApi } from "@geosearch/client";
+
+          const api = new CitiesApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const city = (await api.getCity({ id: 5391959 })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          city = GeoSearch::CitiesApi.new.get_city(5391959).data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $city = (new GeoSearch\Api\CitiesApi(null, $cfg))->getCity(5391959)->getData();
   /v1/postal-codes:
     get:
       description: Returns a paginated list of postal codes with optional filtering
@@ -772,6 +965,9 @@ paths:
       summary: List postal codes
       tags:
       - Postal Codes
+      x-quota-cost:
+        base: 1
+        note: 2 with ?within=
       x-codeSamples:
       - lang: curl
         source: |
@@ -779,24 +975,43 @@ paths:
             "https://geosearch.dev/v1/postal-codes?country=US&code=94105"
       - lang: Go
         source: |
-          req, _ := http.NewRequest("GET",
-            "https://geosearch.dev/v1/postal-codes?country=US&code=94105", nil)
-          req.Header.Set("X-API-Key", "YOUR_KEY")
-          resp, err := http.DefaultClient.Do(req)
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          codes, _, err := client.PostalCodesAPI.ListPostalCodes(ctx).
+              Country("US").Code("94105").Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/postal-codes",
-              headers={"X-API-Key": "YOUR_KEY"},
-              params={"country": "US", "code": "94105"}
-          )
-      - lang: JavaScript
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              codes = geosearch.PostalCodesApi(client).list_postal_codes(
+                  country="US", code="94105").data
+      - lang: TypeScript
         source: |
-          const resp = await fetch(
-            "https://geosearch.dev/v1/postal-codes?country=US&code=94105",
-            { headers: { "X-API-Key": "YOUR_KEY" } }
-          );
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, PostalCodesApi } from "@geosearch/client";
+
+          const api = new PostalCodesApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const codes = (await api.listPostalCodes({ country: "US", code: "94105" })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          codes = GeoSearch::PostalCodesApi.new.list_postal_codes(country: "US", code: "94105").data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $codes = (new GeoSearch\Api\PostalCodesApi(null, $cfg))->listPostalCodes(null, "US", "94105");
+          // lang, country, code shown — the remaining 6 parameters are positional and optional
   /v1/postal-codes/nearest:
     get:
       description: Returns the nearest postal codes to a given latitude/longitude
@@ -856,6 +1071,8 @@ paths:
       summary: Find nearest postal codes
       tags:
       - Postal Codes
+      x-quota-cost:
+        base: 1
       x-codeSamples:
       - lang: curl
         source: |
@@ -863,24 +1080,43 @@ paths:
             "https://geosearch.dev/v1/postal-codes/nearest?lat=37.7749&lon=-122.4194&limit=3"
       - lang: Go
         source: |
-          req, _ := http.NewRequest("GET",
-            "https://geosearch.dev/v1/postal-codes/nearest?lat=37.7749&lon=-122.4194&limit=3", nil)
-          req.Header.Set("X-API-Key", "YOUR_KEY")
-          resp, err := http.DefaultClient.Do(req)
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          codes, _, err := client.PostalCodesAPI.NearestPostalCode(ctx).
+              Lat(37.7749).Lon(-122.4194).Limit(3).Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/postal-codes/nearest",
-              headers={"X-API-Key": "YOUR_KEY"},
-              params={"lat": 37.7749, "lon": -122.4194, "limit": 3}
-          )
-      - lang: JavaScript
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              codes = geosearch.PostalCodesApi(client).nearest_postal_code(
+                  37.7749, -122.4194, limit=3).data
+      - lang: TypeScript
         source: |
-          const resp = await fetch(
-            "https://geosearch.dev/v1/postal-codes/nearest?lat=37.7749&lon=-122.4194&limit=3",
-            { headers: { "X-API-Key": "YOUR_KEY" } }
-          );
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, PostalCodesApi } from "@geosearch/client";
+
+          const api = new PostalCodesApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const codes = (await api.nearestPostalCode({ lat: 37.7749, lon: -122.4194, limit: 3 })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          codes = GeoSearch::PostalCodesApi.new.nearest_postal_code(37.7749, -122.4194, limit: 3).data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $codes = (new GeoSearch\Api\PostalCodesApi(null, $cfg))->nearestPostalCode(37.7749, -122.4194, null, 3);
+          // lat, lon, lang, limit — the full positional parameter list
   /v1/timezones:
     get:
       description: Returns a paginated list of timezones with optional filtering by
@@ -923,6 +1159,8 @@ paths:
       summary: List timezones
       tags:
       - Timezones
+      x-quota-cost:
+        base: 1
       x-codeSamples:
       - lang: curl
         source: |
@@ -930,23 +1168,41 @@ paths:
             "https://geosearch.dev/v1/timezones?country=US"
       - lang: Go
         source: |
-          req, _ := http.NewRequest("GET", "https://geosearch.dev/v1/timezones?country=US", nil)
-          req.Header.Set("X-API-Key", "YOUR_KEY")
-          resp, err := http.DefaultClient.Do(req)
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          timezones, _, err := client.TimezonesAPI.ListTimezones(ctx).Country("US").Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/timezones",
-              headers={"X-API-Key": "YOUR_KEY"},
-              params={"country": "US"}
-          )
-      - lang: JavaScript
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              timezones = geosearch.TimezonesApi(client).list_timezones(country="US").data
+      - lang: TypeScript
         source: |
-          const resp = await fetch(
-            "https://geosearch.dev/v1/timezones?country=US",
-            { headers: { "X-API-Key": "YOUR_KEY" } }
-          );
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, TimezonesApi } from "@geosearch/client";
+
+          const api = new TimezonesApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const timezones = (await api.listTimezones({ country: "US" })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          timezones = GeoSearch::TimezonesApi.new.list_timezones(country: "US").data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $timezones = (new GeoSearch\Api\TimezonesApi(null, $cfg))->listTimezones(null, "US");
+          // lang, country shown — the remaining 4 parameters are positional and optional
   /v1/timezones/{tzId}:
     get:
       description: |
@@ -984,28 +1240,48 @@ paths:
       summary: Get timezone by IANA ID
       tags:
       - Timezones
+      x-quota-cost:
+        base: 1
       x-codeSamples:
       - lang: curl
-        source: "curl -H \"X-API-Key: YOUR_KEY\" https://geosearch.dev/v1/timezones/America/New_York"
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" https://geosearch.dev/v1/timezones/America/New_York
       - lang: Go
         source: |
-          req, _ := http.NewRequest("GET",
-            "https://geosearch.dev/v1/timezones/America/New_York", nil)
-          req.Header.Set("X-API-Key", "YOUR_KEY")
-          resp, err := http.DefaultClient.Do(req)
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          tz, _, err := client.TimezonesAPI.GetTimezone(ctx, "America/New_York").Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/timezones/America/New_York",
-              headers={"X-API-Key": "YOUR_KEY"}
-          )
-      - lang: JavaScript
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              tz = geosearch.TimezonesApi(client).get_timezone("America/New_York").data
+      - lang: TypeScript
         source: |
-          const resp = await fetch(
-            "https://geosearch.dev/v1/timezones/America/New_York",
-            { headers: { "X-API-Key": "YOUR_KEY" } }
-          );
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, TimezonesApi } from "@geosearch/client";
+
+          const api = new TimezonesApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const tz = (await api.getTimezone({ tzId: "America/New_York" })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          tz = GeoSearch::TimezonesApi.new.get_timezone("America/New_York").data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $tz = (new GeoSearch\Api\TimezonesApi(null, $cfg))->getTimezone("America/New_York")->getData();
   /v1/ip/{address}:
     get:
       description: Returns geolocation data for a given IPv4 or IPv6 address.
@@ -1071,27 +1347,48 @@ paths:
       summary: IP geolocation lookup
       tags:
       - IP Geolocation
+      x-quota-cost:
+        base: 1
       x-codeSamples:
       - lang: curl
-        source: "curl -H \"X-API-Key: YOUR_KEY\" https://geosearch.dev/v1/ip/8.8.8.8"
+        source: |
+          curl -H "X-API-Key: YOUR_KEY" https://geosearch.dev/v1/ip/8.8.8.8
       - lang: Go
         source: |
-          req, _ := http.NewRequest("GET", "https://geosearch.dev/v1/ip/8.8.8.8", nil)
-          req.Header.Set("X-API-Key", "YOUR_KEY")
-          resp, err := http.DefaultClient.Do(req)
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          location, _, err := client.IPGeolocationAPI.LookupIP(ctx, "8.8.8.8").Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/ip/8.8.8.8",
-              headers={"X-API-Key": "YOUR_KEY"}
-          )
-      - lang: JavaScript
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              location = geosearch.IPGeolocationApi(client).lookup_ip("8.8.8.8").data
+      - lang: TypeScript
         source: |
-          const resp = await fetch(
-            "https://geosearch.dev/v1/ip/8.8.8.8",
-            { headers: { "X-API-Key": "YOUR_KEY" } }
-          );
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, IPGeolocationApi } from "@geosearch/client";
+
+          const api = new IPGeolocationApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const location = (await api.lookupIP({ address: "8.8.8.8" })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          location = GeoSearch::IPGeolocationApi.new.lookup_ip("8.8.8.8").data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $location = (new GeoSearch\Api\IPGeolocationApi(null, $cfg))->lookupIP("8.8.8.8")->getData();
   /v1/ip/me:
     get:
       description: |
@@ -1115,27 +1412,54 @@ paths:
       summary: Caller's IP geolocation
       tags:
       - IP Geolocation
+      x-quota-cost:
+        base: 1
       x-codeSamples:
       - lang: curl
-        source: "curl -H \"X-API-Key: YOUR_KEY\" https://geosearch.dev/v1/ip/me"
+        source: |
+          # no address in the path — /v1/ip/me resolves the caller's own IP
+          curl -H "X-API-Key: YOUR_KEY" https://geosearch.dev/v1/ip/me
       - lang: Go
         source: |
-          req, _ := http.NewRequest("GET", "https://geosearch.dev/v1/ip/me", nil)
-          req.Header.Set("X-API-Key", "YOUR_KEY")
-          resp, err := http.DefaultClient.Do(req)
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          // no address argument — the API resolves the caller's own IP
+          me, _, err := client.IPGeolocationAPI.LookupMyIP(ctx).Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/ip/me",
-              headers={"X-API-Key": "YOUR_KEY"}
-          )
-      - lang: JavaScript
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              # no address argument — the API resolves the caller's own IP
+              me = geosearch.IPGeolocationApi(client).lookup_my_ip().data
+      - lang: TypeScript
         source: |
-          const resp = await fetch(
-            "https://geosearch.dev/v1/ip/me",
-            { headers: { "X-API-Key": "YOUR_KEY" } }
-          );
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, IPGeolocationApi } from "@geosearch/client";
+
+          const api = new IPGeolocationApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          // no address argument — the API resolves the caller's own IP
+          const me = (await api.lookupMyIP()).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          # no address argument — the API resolves the caller's own IP
+          me = GeoSearch::IPGeolocationApi.new.lookup_my_ip.data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          // no address argument — the API resolves the caller's own IP
+          $me = (new GeoSearch\Api\IPGeolocationApi(null, $cfg))->lookupMyIP()->getData();
   /v1/countries/{code}/neighbors:
     get:
       description: Returns countries that share a border with the specified country.
@@ -1170,18 +1494,49 @@ paths:
       summary: List neighboring countries
       tags:
       - Countries
+      x-quota-cost:
+        base: 1
       x-codeSamples:
       - lang: curl
         source: |
           curl -H "X-API-Key: YOUR_KEY" \
             "https://geosearch.dev/v1/countries/DE/neighbors"
+      - lang: Go
+        source: |
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          neighbors, _, err := client.CountriesAPI.CountryNeighbors(ctx, "DE").Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/countries/DE/neighbors",
-              headers={"X-API-Key": "YOUR_KEY"}
-          )
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              neighbors = geosearch.CountriesApi(client).country_neighbors("DE").data
+      - lang: TypeScript
+        source: |
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, CountriesApi } from "@geosearch/client";
+
+          const api = new CountriesApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const neighbors = (await api.countryNeighbors({ code: "DE" })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          neighbors = GeoSearch::CountriesApi.new.country_neighbors("DE").data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $neighbors = (new GeoSearch\Api\CountriesApi(null, $cfg))->countryNeighbors("DE")->getData();
   /v1/regions/{id}/children:
     get:
       description: Returns all cities that are direct children of the specified region
@@ -1216,18 +1571,49 @@ paths:
       summary: List child cities of a region
       tags:
       - Regions
+      x-quota-cost:
+        base: 1
       x-codeSamples:
       - lang: curl
         source: |
           curl -H "X-API-Key: YOUR_KEY" \
             "https://geosearch.dev/v1/regions/5332921/children"
+      - lang: Go
+        source: |
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          children, _, err := client.RegionsAPI.RegionChildren(ctx, 5332921).Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/regions/5332921/children",
-              headers={"X-API-Key": "YOUR_KEY"}
-          )
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              children = geosearch.RegionsApi(client).region_children(5332921).data
+      - lang: TypeScript
+        source: |
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, RegionsApi } from "@geosearch/client";
+
+          const api = new RegionsApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const children = (await api.regionChildren({ id: 5332921 })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          children = GeoSearch::RegionsApi.new.region_children(5332921).data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $children = (new GeoSearch\Api\RegionsApi(null, $cfg))->regionChildren(5332921)->getData();
   /v1/cities/{id}/hierarchy:
     get:
       description: |
@@ -1282,18 +1668,49 @@ paths:
       summary: Get administrative hierarchy for a city
       tags:
       - Cities
+      x-quota-cost:
+        base: 1
       x-codeSamples:
       - lang: curl
         source: |
           curl -H "X-API-Key: YOUR_KEY" \
             "https://geosearch.dev/v1/cities/5391959/hierarchy"
+      - lang: Go
+        source: |
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          hierarchy, _, err := client.CitiesAPI.CityHierarchy(ctx, 5391959).Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/cities/5391959/hierarchy",
-              headers={"X-API-Key": "YOUR_KEY"}
-          )
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              hierarchy = geosearch.CitiesApi(client).city_hierarchy(5391959).data
+      - lang: TypeScript
+        source: |
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, CitiesApi } from "@geosearch/client";
+
+          const api = new CitiesApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const hierarchy = (await api.cityHierarchy({ id: 5391959 })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          hierarchy = GeoSearch::CitiesApi.new.city_hierarchy(5391959).data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $hierarchy = (new GeoSearch\Api\CitiesApi(null, $cfg))->cityHierarchy(5391959)->getData();
   /v1/batch/cities:
     post:
       description: Returns multiple cities in a single request. Maximum 50 IDs per
@@ -1329,6 +1746,9 @@ paths:
       summary: Batch lookup cities by IDs
       tags:
       - Batch
+      x-quota-cost:
+        base: 1
+        note: per requested id
       x-codeSamples:
       - lang: curl
         source: |
@@ -1336,14 +1756,46 @@ paths:
             -H "Content-Type: application/json" \
             -d '{"ids": [5391959, 5128581]}' \
             "https://geosearch.dev/v1/batch/cities"
+      - lang: Go
+        source: |
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          cities, _, err := client.BatchAPI.BatchCities(ctx).
+              BatchRequest(geosearch.BatchRequest{Ids: []int64{5391959, 5128581}}).Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.post(
-              "https://geosearch.dev/v1/batch/cities",
-              headers={"X-API-Key": "YOUR_KEY"},
-              json={"ids": [5391959, 5128581]}
-          )
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              cities = geosearch.BatchApi(client).batch_cities(
+                  geosearch.BatchRequest(ids=[5391959, 5128581])).data
+      - lang: TypeScript
+        source: |
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, BatchApi } from "@geosearch/client";
+
+          const api = new BatchApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const cities = (await api.batchCities({ batchRequest: { ids: [5391959, 5128581] } })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          cities = GeoSearch::BatchApi.new.batch_cities(
+            GeoSearch::BatchRequest.new(ids: [5391959, 5128581])).data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $request = new GeoSearch\Model\BatchRequest(["ids" => [5391959, 5128581]]);
+          $cities = (new GeoSearch\Api\BatchApi(null, $cfg))->batchCities($request)->getData();
   /v1/batch/countries:
     post:
       description: Returns multiple countries in a single request. Maximum 50 IDs
@@ -1379,6 +1831,9 @@ paths:
       summary: Batch lookup countries by IDs
       tags:
       - Batch
+      x-quota-cost:
+        base: 1
+        note: per returned entity
       x-codeSamples:
       - lang: curl
         source: |
@@ -1386,14 +1841,46 @@ paths:
             -H "Content-Type: application/json" \
             -d '{"ids": [6252001, 2635167]}' \
             "https://geosearch.dev/v1/batch/countries"
+      - lang: Go
+        source: |
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          countries, _, err := client.BatchAPI.BatchCountries(ctx).
+              BatchRequest(geosearch.BatchRequest{Ids: []int64{6252001, 2635167}}).Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.post(
-              "https://geosearch.dev/v1/batch/countries",
-              headers={"X-API-Key": "YOUR_KEY"},
-              json={"ids": [6252001, 2635167]}
-          )
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              countries = geosearch.BatchApi(client).batch_countries(
+                  geosearch.BatchRequest(ids=[6252001, 2635167])).data
+      - lang: TypeScript
+        source: |
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, BatchApi } from "@geosearch/client";
+
+          const api = new BatchApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const countries = (await api.batchCountries({ batchRequest: { ids: [6252001, 2635167] } })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          countries = GeoSearch::BatchApi.new.batch_countries(
+            GeoSearch::BatchRequest.new(ids: [6252001, 2635167])).data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $request = new GeoSearch\Model\BatchRequest(["ids" => [6252001, 2635167]]);
+          $countries = (new GeoSearch\Api\BatchApi(null, $cfg))->batchCountries($request)->getData();
   /v1/batch/regions:
     post:
       description: Returns multiple regions in a single request. Maximum 50 IDs per
@@ -1429,6 +1916,9 @@ paths:
       summary: Batch lookup regions by IDs
       tags:
       - Batch
+      x-quota-cost:
+        base: 1
+        note: per returned entity
       x-codeSamples:
       - lang: curl
         source: |
@@ -1436,14 +1926,46 @@ paths:
             -H "Content-Type: application/json" \
             -d '{"ids": [5332921, 5128638]}' \
             "https://geosearch.dev/v1/batch/regions"
+      - lang: Go
+        source: |
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          regions, _, err := client.BatchAPI.BatchRegions(ctx).
+              BatchRequest(geosearch.BatchRequest{Ids: []int64{5332921, 5128638}}).Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.post(
-              "https://geosearch.dev/v1/batch/regions",
-              headers={"X-API-Key": "YOUR_KEY"},
-              json={"ids": [5332921, 5128638]}
-          )
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              regions = geosearch.BatchApi(client).batch_regions(
+                  geosearch.BatchRequest(ids=[5332921, 5128638])).data
+      - lang: TypeScript
+        source: |
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, BatchApi } from "@geosearch/client";
+
+          const api = new BatchApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const regions = (await api.batchRegions({ batchRequest: { ids: [5332921, 5128638] } })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          regions = GeoSearch::BatchApi.new.batch_regions(
+            GeoSearch::BatchRequest.new(ids: [5332921, 5128638])).data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $request = new GeoSearch\Model\BatchRequest(["ids" => [5332921, 5128638]]);
+          $regions = (new GeoSearch\Api\BatchApi(null, $cfg))->batchRegions($request)->getData();
   /v1/autocomplete:
     get:
       description: |
@@ -1500,19 +2022,51 @@ paths:
       summary: Autocomplete search
       tags:
       - Search
+      x-quota-cost:
+        base: 1
       x-codeSamples:
       - lang: curl
         source: |
           curl -H "X-API-Key: YOUR_KEY" \
             "https://geosearch.dev/v1/autocomplete?q=San+Fran&limit=10"
+      - lang: Go
+        source: |
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          suggestions, _, err := client.SearchAPI.Autocomplete(ctx).
+              Q("San Fran").Limit(10).Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/autocomplete",
-              headers={"X-API-Key": "YOUR_KEY"},
-              params={"q": "San Fran", "limit": 10}
-          )
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              suggestions = geosearch.SearchApi(client).autocomplete("San Fran", limit=10).data
+      - lang: TypeScript
+        source: |
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, SearchApi } from "@geosearch/client";
+
+          const api = new SearchApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const suggestions = (await api.autocomplete({ q: "San Fran", limit: 10 })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          suggestions = GeoSearch::SearchApi.new.autocomplete("San Fran", limit: 10).data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $suggestions = (new GeoSearch\Api\SearchApi(null, $cfg))->autocomplete("San Fran", null, 10)->getData();
+          // q, lang, limit — fields is the one remaining optional parameter
   /v1/cities/nearby:
     get:
       description: |
@@ -1598,19 +2152,50 @@ paths:
       summary: Find nearby cities
       tags:
       - Cities
+      x-quota-cost:
+        base: 1
       x-codeSamples:
       - lang: curl
         source: |
           curl -H "X-API-Key: YOUR_KEY" \
             "https://geosearch.dev/v1/cities/nearby?lat=37.7749&lon=-122.4194&radius=50"
+      - lang: Go
+        source: |
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          cities, _, err := client.CitiesAPI.NearbyCities(ctx).
+              Lat(37.7749).Lon(-122.4194).Radius(50).Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/cities/nearby",
-              headers={"X-API-Key": "YOUR_KEY"},
-              params={"lat": 37.7749, "lon": -122.4194, "radius": 50}
-          )
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              cities = geosearch.CitiesApi(client).nearby_cities(37.7749, -122.4194, radius=50).data
+      - lang: TypeScript
+        source: |
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, CitiesApi } from "@geosearch/client";
+
+          const api = new CitiesApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const cities = (await api.nearbyCities({ lat: 37.7749, lon: -122.4194, radius: 50 })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          cities = GeoSearch::CitiesApi.new.nearby_cities(37.7749, -122.4194, radius: 50).data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $cities = (new GeoSearch\Api\CitiesApi(null, $cfg))->nearbyCities(37.7749, -122.4194, 50)->getData();
   /v1/reverse:
     get:
       description: |
@@ -1673,19 +2258,50 @@ paths:
       summary: Reverse geocode coordinates
       tags:
       - Search
+      x-quota-cost:
+        base: 1
       x-codeSamples:
       - lang: curl
         source: |
           curl -H "X-API-Key: YOUR_KEY" \
             "https://geosearch.dev/v1/reverse?lat=37.7749&lon=-122.4194"
+      - lang: Go
+        source: |
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          nearest, _, err := client.SearchAPI.ReverseGeocode(ctx).
+              Lat(37.7749).Lon(-122.4194).Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/reverse",
-              headers={"X-API-Key": "YOUR_KEY"},
-              params={"lat": 37.7749, "lon": -122.4194}
-          )
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              nearest = geosearch.SearchApi(client).reverse_geocode(37.7749, -122.4194).data
+      - lang: TypeScript
+        source: |
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, SearchApi } from "@geosearch/client";
+
+          const api = new SearchApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const nearest = (await api.reverseGeocode({ lat: 37.7749, lon: -122.4194 })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          nearest = GeoSearch::SearchApi.new.reverse_geocode(37.7749, -122.4194).data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $nearest = (new GeoSearch\Api\SearchApi(null, $cfg))->reverseGeocode(37.7749, -122.4194)->getData();
   /v1/resolve:
     get:
       description: |
@@ -1810,19 +2426,50 @@ paths:
       summary: Resolve coordinates to their containing administrative areas
       tags:
       - Search
+      x-quota-cost:
+        base: 1
       x-codeSamples:
       - lang: curl
         source: |
           curl -H "X-API-Key: YOUR_KEY" \
             "https://geosearch.dev/v1/resolve?lat=37.7749&lon=-122.4194"
+      - lang: Go
+        source: |
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          areas, _, err := client.SearchAPI.ResolveCoordinate(ctx).
+              Lat(37.7749).Lon(-122.4194).Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/resolve",
-              headers={"X-API-Key": "YOUR_KEY"},
-              params={"lat": 37.7749, "lon": -122.4194}
-          )
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              areas = geosearch.SearchApi(client).resolve_coordinate(37.7749, -122.4194).data
+      - lang: TypeScript
+        source: |
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, SearchApi } from "@geosearch/client";
+
+          const api = new SearchApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const areas = (await api.resolveCoordinate({ lat: 37.7749, lon: -122.4194 })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          areas = GeoSearch::SearchApi.new.resolve_coordinate(37.7749, -122.4194).data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $areas = (new GeoSearch\Api\SearchApi(null, $cfg))->resolveCoordinate(37.7749, -122.4194)->getData();
   /v1/boundaries/{geoname_id}:
     get:
       description: |
@@ -1978,19 +2625,50 @@ paths:
       summary: Fetch an area's boundary polygon as GeoJSON
       tags:
       - Boundaries
+      x-quota-cost:
+        base: 5
       x-codeSamples:
       - lang: curl
         source: |
           curl -H "X-API-Key: YOUR_KEY" \
-            "https://geosearch.dev/v1/boundaries/6252001"
+            "https://geosearch.dev/v1/boundaries/6252001?simplify=0.01"
+      - lang: Go
+        source: |
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          boundary, _, err := client.BoundariesAPI.GetBoundary(ctx, 6252001).
+              Simplify(0.01).Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/boundaries/6252001",
-              headers={"X-API-Key": "YOUR_KEY"},
-              params={"simplify": 0.01}
-          )
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              boundary = geosearch.BoundariesApi(client).get_boundary(6252001, simplify=0.01).data
+      - lang: TypeScript
+        source: |
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, BoundariesApi } from "@geosearch/client";
+
+          const api = new BoundariesApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const boundary = (await api.getBoundary({ geonameId: 6252001, simplify: 0.01 })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          boundary = GeoSearch::BoundariesApi.new.get_boundary(6252001, simplify: 0.01).data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $boundary = (new GeoSearch\Api\BoundariesApi(null, $cfg))->getBoundary(6252001, 0.01)->getData();
   /v1/search:
     get:
       description: |
@@ -2062,6 +2740,8 @@ paths:
       summary: Cross-type search
       tags:
       - Search
+      x-quota-cost:
+        base: 1
       x-codeSamples:
       - lang: curl
         source: |
@@ -2069,24 +2749,42 @@ paths:
             "https://geosearch.dev/v1/search?q=San+Fran&type=city&limit=10"
       - lang: Go
         source: |
-          req, _ := http.NewRequest("GET",
-            "https://geosearch.dev/v1/search?q=San+Fran&type=city&limit=10", nil)
-          req.Header.Set("X-API-Key", "YOUR_KEY")
-          resp, err := http.DefaultClient.Do(req)
+          // go get github.com/geosearch-dev/geosearch-go
+          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
+          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
+              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
+          results, _, err := client.SearchAPI.Search(ctx).
+              Q("San Fran").Type_("city").Limit(10).Execute()
       - lang: Python
         source: |
-          import requests
-          r = requests.get(
-              "https://geosearch.dev/v1/search",
-              headers={"X-API-Key": "YOUR_KEY"},
-              params={"q": "San Fran", "type": "city", "limit": 10}
-          )
-      - lang: JavaScript
+          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
+          import geosearch
+
+          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
+          with geosearch.ApiClient(cfg) as client:
+              results = geosearch.SearchApi(client).search("San Fran", type="city", limit=10).data
+      - lang: TypeScript
         source: |
-          const resp = await fetch(
-            "https://geosearch.dev/v1/search?q=San+Fran&type=city&limit=10",
-            { headers: { "X-API-Key": "YOUR_KEY" } }
-          );
+          // npm install github:geosearch-dev/geosearch-typescript
+          import { Configuration, SearchApi } from "@geosearch/client";
+
+          const api = new SearchApi(new Configuration({ apiKey: "YOUR_KEY" }));
+          const results = (await api.search({ q: "San Fran", type: "city", limit: 10 })).data;
+      - lang: Ruby
+        source: |
+          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
+          require "geosearch"
+
+          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
+          results = GeoSearch::SearchApi.new.search("San Fran", type: "city", limit: 10).data
+      - lang: PHP
+        source: |
+          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
+          // composer require geosearch-dev/geosearch-php
+          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
+              ->setApiKey("X-API-Key", "YOUR_KEY");
+          $results = (new GeoSearch\Api\SearchApi(null, $cfg))->search("San Fran", null, "city", 10)->getData();
+          // q, lang, type, limit shown — fields is the one remaining optional parameter
 components:
   parameters:
     cursor:
@@ -2542,7 +3240,7 @@ components:
         - es-US
         fips_code: US
         latitude: 39.76
-        flag_emoji: flag_emoji
+        flag_emoji: 🇺🇸
         continent_code: NA
         neighbours:
         - CA
@@ -2556,7 +3254,17 @@ components:
         area_sq_km: 9833520.0
         iso_numeric: 840
         name: United States
-        geometry: ""
+        geometry:
+          type: MultiPolygon
+          coordinates:
+          - - - - -124.7
+                - 48.4
+              - - -124.6
+                - 48.4
+              - - -124.6
+                - 48.3
+              - - -124.7
+                - 48.4
         id: 1
         iso_code: US
         longitude: -98.5
@@ -2639,6 +3347,7 @@ components:
           format: double
           type: number
         flag_emoji:
+          example: 🇺🇸
           type: string
         geometry:
           allOf:
@@ -2647,6 +3356,17 @@ components:
             Country boundary. Returned by default on `GET /v1/countries/{code}` and on request via `?fields=geometry` on `GET /v1/countries`.
 
             NOT TIER-GATED. Country geometry is served on every plan, including Free. Region geometry is gated — see the `Region` schema.
+          example:
+            type: MultiPolygon
+            coordinates:
+            - - - - -124.7
+                  - 48.4
+                - - -124.6
+                  - 48.4
+                - - -124.6
+                  - 48.3
+                - - -124.7
+                  - 48.4
     Region:
       example:
         admin_code: CA
@@ -2658,10 +3378,20 @@ components:
         geoname_id: 5332921
         population: 39538223
         country_code: US
-        parent_geoname_id: 0
+        parent_geoname_id: 6252001
         ascii_name: California
         name: California
-        geometry: ""
+        geometry:
+          type: MultiPolygon
+          coordinates:
+          - - - - -124.7
+                - 48.4
+              - - -124.6
+                - 48.4
+              - - -124.6
+                - 48.3
+              - - -124.7
+                - 48.4
         id: 5332921
         longitude: -119.418
       properties:
@@ -2689,6 +3419,7 @@ components:
           example: 1
           type: integer
         parent_geoname_id:
+          example: 6252001
           format: int64
           type: integer
         population:
@@ -2714,6 +3445,17 @@ components:
             REQUIRES A PAID PLAN. On all three of those routes this key is OMITTED ENTIRELY for a Free-tier key — absent, not null, with a 200 status and no error. A client reading `data.geometry.type` unconditionally will fail on a null dereference.
 
             To be told explicitly rather than silently, request the polygon from `GET /v1/boundaries/{geoname_id}`, which answers a Free key with a 403 and an upgrade link.
+          example:
+            type: MultiPolygon
+            coordinates:
+            - - - - -124.7
+                  - 48.4
+                - - -124.6
+                  - 48.4
+                - - -124.6
+                  - 48.3
+                - - -124.7
+                  - 48.4
     City:
       example:
         admin1_code: CA
@@ -2787,20 +3529,21 @@ components:
         country:
           name: United States
           iso_code: US
-        admin_name3: admin_name3
+        admin_name3: ""
         latitude: 37.7864
         accuracy: 4
         admin_name1: California
         admin_name2: San Francisco
         country_code: US
-        admin_code3: admin_code3
+        admin_code3: ""
         admin_code2: "075"
         admin_code1: CA
-        id: 0
+        id: 1140425
         postal_code: "94105"
         longitude: -122.3892
       properties:
         id:
+          example: 1140425
           format: int64
           type: integer
         country_code:
@@ -2825,8 +3568,14 @@ components:
           example: "075"
           type: string
         admin_name3:
+          description: "Third-level administrative area. Empty where the source data\
+            \ defines none — most US rows, including this example."
+          example: ""
           type: string
         admin_code3:
+          description: "Third-level administrative code. Empty where the source data\
+            \ defines none — most US rows, including this example."
+          example: ""
           type: string
         latitude:
           example: 37.7864
@@ -2846,11 +3595,12 @@ components:
         dst_offset: -4.0
         country_code: US
         timezone_id: America/New_York
-        id: 0
+        id: 424
         gmt_offset: -5.0
         raw_offset: -5.0
       properties:
         id:
+          example: 424
           format: int64
           type: integer
         country_code:
@@ -2994,7 +3744,7 @@ components:
           type: string
     PaginationMeta:
       example:
-        prev_cursor: prev_cursor
+        prev_cursor: eyJpZCI6MX0
         next_cursor: eyJpZCI6MjV9
         count: 25
         has_next: true
@@ -3006,6 +3756,7 @@ components:
           type: string
         prev_cursor:
           description: Cursor for the previous page
+          example: eyJpZCI6MX0
           type: string
         has_next:
           example: true
@@ -3109,7 +3860,7 @@ components:
           - es-US
           fips_code: US
           latitude: 39.76
-          flag_emoji: flag_emoji
+          flag_emoji: 🇺🇸
           continent_code: NA
           neighbours:
           - CA
@@ -3123,7 +3874,17 @@ components:
           area_sq_km: 9833520.0
           iso_numeric: 840
           name: United States
-          geometry: ""
+          geometry:
+            type: MultiPolygon
+            coordinates:
+            - - - - -124.7
+                  - 48.4
+                - - -124.6
+                  - 48.4
+                - - -124.6
+                  - 48.3
+                - - -124.7
+                  - 48.4
           id: 1
           iso_code: US
           longitude: -98.5
@@ -3136,7 +3897,7 @@ components:
           - es-US
           fips_code: US
           latitude: 39.76
-          flag_emoji: flag_emoji
+          flag_emoji: 🇺🇸
           continent_code: NA
           neighbours:
           - CA
@@ -3150,12 +3911,22 @@ components:
           area_sq_km: 9833520.0
           iso_numeric: 840
           name: United States
-          geometry: ""
+          geometry:
+            type: MultiPolygon
+            coordinates:
+            - - - - -124.7
+                  - 48.4
+                - - -124.6
+                  - 48.4
+                - - -124.6
+                  - 48.3
+                - - -124.7
+                  - 48.4
           id: 1
           iso_code: US
           longitude: -98.5
         meta:
-          prev_cursor: prev_cursor
+          prev_cursor: eyJpZCI6MX0
           next_cursor: eyJpZCI6MjV9
           count: 25
           has_next: true
@@ -3179,7 +3950,7 @@ components:
           - es-US
           fips_code: US
           latitude: 39.76
-          flag_emoji: flag_emoji
+          flag_emoji: 🇺🇸
           continent_code: NA
           neighbours:
           - CA
@@ -3193,7 +3964,17 @@ components:
           area_sq_km: 9833520.0
           iso_numeric: 840
           name: United States
-          geometry: ""
+          geometry:
+            type: MultiPolygon
+            coordinates:
+            - - - - -124.7
+                  - 48.4
+                - - -124.6
+                  - 48.4
+                - - -124.6
+                  - 48.3
+                - - -124.7
+                  - 48.4
           id: 1
           iso_code: US
           longitude: -98.5
@@ -3212,10 +3993,20 @@ components:
           geoname_id: 5332921
           population: 39538223
           country_code: US
-          parent_geoname_id: 0
+          parent_geoname_id: 6252001
           ascii_name: California
           name: California
-          geometry: ""
+          geometry:
+            type: MultiPolygon
+            coordinates:
+            - - - - -124.7
+                  - 48.4
+                - - -124.6
+                  - 48.4
+                - - -124.6
+                  - 48.3
+                - - -124.7
+                  - 48.4
           id: 5332921
           longitude: -119.418
         - admin_code: CA
@@ -3227,14 +4018,24 @@ components:
           geoname_id: 5332921
           population: 39538223
           country_code: US
-          parent_geoname_id: 0
+          parent_geoname_id: 6252001
           ascii_name: California
           name: California
-          geometry: ""
+          geometry:
+            type: MultiPolygon
+            coordinates:
+            - - - - -124.7
+                  - 48.4
+                - - -124.6
+                  - 48.4
+                - - -124.6
+                  - 48.3
+                - - -124.7
+                  - 48.4
           id: 5332921
           longitude: -119.418
         meta:
-          prev_cursor: prev_cursor
+          prev_cursor: eyJpZCI6MX0
           next_cursor: eyJpZCI6MjV9
           count: 25
           has_next: true
@@ -3258,10 +4059,20 @@ components:
           geoname_id: 5332921
           population: 39538223
           country_code: US
-          parent_geoname_id: 0
+          parent_geoname_id: 6252001
           ascii_name: California
           name: California
-          geometry: ""
+          geometry:
+            type: MultiPolygon
+            coordinates:
+            - - - - -124.7
+                  - 48.4
+                - - -124.6
+                  - 48.4
+                - - -124.6
+                  - 48.3
+                - - -124.7
+                  - 48.4
           id: 5332921
           longitude: -119.418
       properties:
@@ -3309,7 +4120,7 @@ components:
             id: 5332921
           longitude: -122.41942
         meta:
-          prev_cursor: prev_cursor
+          prev_cursor: eyJpZCI6MX0
           next_cursor: eyJpZCI6MjV9
           count: 25
           has_next: true
@@ -3353,36 +4164,36 @@ components:
           country:
             name: United States
             iso_code: US
-          admin_name3: admin_name3
+          admin_name3: ""
           latitude: 37.7864
           accuracy: 4
           admin_name1: California
           admin_name2: San Francisco
           country_code: US
-          admin_code3: admin_code3
+          admin_code3: ""
           admin_code2: "075"
           admin_code1: CA
-          id: 0
+          id: 1140425
           postal_code: "94105"
           longitude: -122.3892
         - place_name: San Francisco
           country:
             name: United States
             iso_code: US
-          admin_name3: admin_name3
+          admin_name3: ""
           latitude: 37.7864
           accuracy: 4
           admin_name1: California
           admin_name2: San Francisco
           country_code: US
-          admin_code3: admin_code3
+          admin_code3: ""
           admin_code2: "075"
           admin_code1: CA
-          id: 0
+          id: 1140425
           postal_code: "94105"
           longitude: -122.3892
         meta:
-          prev_cursor: prev_cursor
+          prev_cursor: eyJpZCI6MX0
           next_cursor: eyJpZCI6MjV9
           count: 25
           has_next: true
@@ -3400,17 +4211,17 @@ components:
         - dst_offset: -4.0
           country_code: US
           timezone_id: America/New_York
-          id: 0
+          id: 424
           gmt_offset: -5.0
           raw_offset: -5.0
         - dst_offset: -4.0
           country_code: US
           timezone_id: America/New_York
-          id: 0
+          id: 424
           gmt_offset: -5.0
           raw_offset: -5.0
         meta:
-          prev_cursor: prev_cursor
+          prev_cursor: eyJpZCI6MX0
           next_cursor: eyJpZCI6MjV9
           count: 25
           has_next: true
@@ -3428,7 +4239,7 @@ components:
           dst_offset: -4.0
           country_code: US
           timezone_id: America/New_York
-          id: 0
+          id: 424
           gmt_offset: -5.0
           raw_offset: -5.0
       properties:
@@ -3483,7 +4294,7 @@ components:
           population: 873965
           longitude: -122.41942
         meta:
-          prev_cursor: prev_cursor
+          prev_cursor: eyJpZCI6MX0
           next_cursor: eyJpZCI6MjV9
           count: 25
           has_next: true
@@ -3538,7 +4349,7 @@ components:
           type: city
           population: 873965
         meta:
-          prev_cursor: prev_cursor
+          prev_cursor: eyJpZCI6MX0
           next_cursor: eyJpZCI6MjV9
           count: 25
           has_next: true
@@ -3635,7 +4446,7 @@ components:
           population: 873965
           longitude: -122.41942
         meta:
-          prev_cursor: prev_cursor
+          prev_cursor: eyJpZCI6MX0
           next_cursor: eyJpZCI6MjV9
           count: 25
           has_next: true
@@ -3739,7 +4550,7 @@ components:
           type: city
           geoname_id: 5391959
         meta:
-          prev_cursor: prev_cursor
+          prev_cursor: eyJpZCI6MX0
           next_cursor: eyJpZCI6MjV9
           count: 25
           has_next: true
@@ -3757,8 +4568,14 @@ components:
         name: United States
         geometry:
           coordinates:
-          - ""
-          - ""
+          - - - - -124.7
+                - 48.4
+              - - -124.6
+                - 48.4
+              - - -124.6
+                - 48.3
+              - - -124.7
+                - 48.4
           type: MultiPolygon
         simplify: 0.8008281904610115
         type: country
@@ -3803,8 +4620,14 @@ components:
           name: United States
           geometry:
             coordinates:
-            - ""
-            - ""
+            - - - - -124.7
+                  - 48.4
+                - - -124.6
+                  - 48.4
+                - - -124.6
+                  - 48.3
+                - - -124.7
+                  - 48.4
             type: MultiPolygon
           simplify: 0.8008281904610115
           type: country
@@ -3817,8 +4640,14 @@ components:
         : ...}` object itself, NOT a GeoJSON `Feature`. There is no `properties` wrapper."
       example:
         coordinates:
-        - ""
-        - ""
+        - - - - -124.7
+              - 48.4
+            - - -124.6
+              - 48.4
+            - - -124.6
+              - 48.3
+            - - -124.7
+              - 48.4
         type: MultiPolygon
       properties:
         type:
@@ -3834,6 +4663,15 @@ components:
           description: "Nesting depth depends on `type`: three levels for `Polygon`,\
             \ four for `MultiPolygon`. Positions are `[longitude, latitude]` in EPSG:4326,\
             \ per the GeoJSON specification."
+          example:
+          - - - - -124.7
+                - 48.4
+              - - -124.6
+                - 48.4
+              - - -124.6
+                - 48.3
+              - - -124.7
+                - 48.4
           items: {}
           type: array
       required:
@@ -3873,12 +4711,33 @@ components:
         REGION GEOMETRY ADDITIONALLY REQUIRES A PAID PLAN. On `GET /v1/regions/{id}`, `GET /v1/regions?fields=geometry` and `GET /v1/countries/{code}/regions?fields=geometry`, the `geometry` key is OMITTED ENTIRELY for Free-tier keys — absent, not null. Country geometry is not gated: `GET /v1/countries/{code}` and `GET /v1/countries?fields=geometry` serve it on every plan, including Free.
 
         The omission is silent by design: it is not an error, and these endpoints still return 200. A client that reads `data.geometry.type` without checking for the key will fail on a null dereference rather than receive a typed zero. To fetch a boundary polygon explicitly — and to receive a 403 with an upgrade link rather than a silent omission when the plan does not include it — use `GET /v1/boundaries/{geoname_id}`.
+      example:
+        type: MultiPolygon
+        coordinates:
+        - - - - -124.7
+              - 48.4
+            - - -124.6
+              - 48.4
+            - - -124.6
+              - 48.3
+            - - -124.7
+              - 48.4
       properties:
         type:
           enum:
           - MultiPolygon
+          example: MultiPolygon
           type: string
         coordinates:
+          example:
+          - - - - -124.7
+                - 48.4
+              - - -124.6
+                - 48.4
+              - - -124.6
+                - 48.3
+              - - -124.7
+                - 48.4
           items:
             items:
               items:
