@@ -6,7 +6,7 @@ info:
   description: |
     Geographic data REST API — modern replacement for GeoNames.
 
-    Serves countries, regions, cities, postal codes, timezones, and IP geolocation data
+    Serves countries, regions, cities, postal codes, and timezones
     through a fast, well-documented JSON API with cursor-based pagination and field selection.
 
     ## Authentication
@@ -61,8 +61,6 @@ tags:
   name: Postal Codes
 - description: IANA timezone data
   name: Timezones
-- description: IP address geolocation lookup
-  name: IP Geolocation
 - description: Cross-type fuzzy text search
   name: Search
 - description: "Boundary polygons as GeoJSON. Charges 5 quota units per served polygon;\
@@ -1283,184 +1281,6 @@ paths:
           $cfg = GeoSearch\Configuration::getDefaultConfiguration()
               ->setApiKey("X-API-Key", "YOUR_KEY");
           $tz = (new GeoSearch\Api\TimezonesApi(null, $cfg))->getTimezone("America/New_York")->getData();
-  /v1/ip/{address}:
-    get:
-      description: Returns geolocation data for a given IPv4 or IPv6 address.
-      operationId: lookupIP
-      parameters:
-      - description: IPv4 or IPv6 address
-        example: 8.8.8.8
-        explode: false
-        in: path
-        name: address
-        required: true
-        schema:
-          type: string
-        style: simple
-      - $ref: "#/components/parameters/lang"
-      - $ref: "#/components/parameters/fields"
-      responses:
-        "200":
-          content:
-            application/json:
-              example:
-                data:
-                  ip: 8.8.8.8
-                  continent:
-                    code: NA
-                    name: North America
-                  country:
-                    iso_code: US
-                    name: United States
-                    is_in_european_union: false
-                  region:
-                    iso_code: CA
-                    name: California
-                  city:
-                    name: Mountain View
-                  postal:
-                    code: "94043"
-                  location:
-                    latitude: 37.386
-                    longitude: -122.0838
-                    accuracy_radius: 1000
-                    timezone: America/Los_Angeles
-                  is_anonymous_proxy: false
-                  is_satellite_provider: false
-              schema:
-                $ref: "#/components/schemas/IPSingleResponse"
-          description: IP geolocation result
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "422":
-          content:
-            application/json:
-              example:
-                error:
-                  code: invalid_parameter
-                  message: invalid IP address format
-                  request_id: req_abc123
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-          description: Invalid IP address format
-        "429":
-          $ref: "#/components/responses/RateLimited"
-      summary: IP geolocation lookup
-      tags:
-      - IP Geolocation
-      x-quota-cost:
-        base: 1
-      x-codeSamples:
-      - lang: curl
-        source: |
-          curl -H "X-API-Key: YOUR_KEY" https://geosearch.dev/v1/ip/8.8.8.8
-      - lang: Go
-        source: |
-          // go get github.com/geosearch-dev/geosearch-go
-          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
-          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
-              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
-          location, _, err := client.IPGeolocationAPI.LookupIP(ctx, "8.8.8.8").Execute()
-      - lang: Python
-        source: |
-          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
-          import geosearch
-
-          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
-          with geosearch.ApiClient(cfg) as client:
-              location = geosearch.IPGeolocationApi(client).lookup_ip("8.8.8.8").data
-      - lang: TypeScript
-        source: |
-          // npm install github:geosearch-dev/geosearch-typescript
-          import { Configuration, IPGeolocationApi } from "@geosearch/client";
-
-          const api = new IPGeolocationApi(new Configuration({ apiKey: "YOUR_KEY" }));
-          const location = (await api.lookupIP({ address: "8.8.8.8" })).data;
-      - lang: Ruby
-        source: |
-          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
-          require "geosearch"
-
-          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
-          location = GeoSearch::IPGeolocationApi.new.lookup_ip("8.8.8.8").data
-      - lang: PHP
-        source: |
-          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
-          // composer require geosearch-dev/geosearch-php
-          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
-              ->setApiKey("X-API-Key", "YOUR_KEY");
-          $location = (new GeoSearch\Api\IPGeolocationApi(null, $cfg))->lookupIP("8.8.8.8")->getData();
-  /v1/ip/me:
-    get:
-      description: |
-        Auto-detects the client's IP address (from X-Forwarded-For or RemoteAddr)
-        and returns its geolocation data.
-      operationId: lookupMyIP
-      parameters:
-      - $ref: "#/components/parameters/lang"
-      - $ref: "#/components/parameters/fields"
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/IPSingleResponse"
-          description: Caller's IP geolocation result
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "429":
-          $ref: "#/components/responses/RateLimited"
-      summary: Caller's IP geolocation
-      tags:
-      - IP Geolocation
-      x-quota-cost:
-        base: 1
-      x-codeSamples:
-      - lang: curl
-        source: |
-          # no address in the path — /v1/ip/me resolves the caller's own IP
-          curl -H "X-API-Key: YOUR_KEY" https://geosearch.dev/v1/ip/me
-      - lang: Go
-        source: |
-          // go get github.com/geosearch-dev/geosearch-go
-          client := geosearch.NewAPIClient(geosearch.NewConfiguration())
-          ctx := context.WithValue(context.Background(), geosearch.ContextAPIKeys,
-              map[string]geosearch.APIKey{"apiKeyAuth": {Key: "YOUR_KEY"}})
-          // no address argument — the API resolves the caller's own IP
-          me, _, err := client.IPGeolocationAPI.LookupMyIP(ctx).Execute()
-      - lang: Python
-        source: |
-          # pip install git+https://github.com/geosearch-dev/geosearch-python.git
-          import geosearch
-
-          cfg = geosearch.Configuration(api_key={"apiKeyAuth": "YOUR_KEY"})
-          with geosearch.ApiClient(cfg) as client:
-              # no address argument — the API resolves the caller's own IP
-              me = geosearch.IPGeolocationApi(client).lookup_my_ip().data
-      - lang: TypeScript
-        source: |
-          // npm install github:geosearch-dev/geosearch-typescript
-          import { Configuration, IPGeolocationApi } from "@geosearch/client";
-
-          const api = new IPGeolocationApi(new Configuration({ apiKey: "YOUR_KEY" }));
-          // no address argument — the API resolves the caller's own IP
-          const me = (await api.lookupMyIP()).data;
-      - lang: Ruby
-        source: |
-          # gem 'geosearch', git: 'https://github.com/geosearch-dev/geosearch-ruby.git'
-          require "geosearch"
-
-          GeoSearch.configure { |c| c.api_key["X-API-Key"] = "YOUR_KEY" }
-          # no address argument — the API resolves the caller's own IP
-          me = GeoSearch::IPGeolocationApi.new.lookup_my_ip.data
-      - lang: PHP
-        source: |
-          // composer config repositories.geosearch vcs https://github.com/geosearch-dev/geosearch-php.git
-          // composer require geosearch-dev/geosearch-php
-          $cfg = GeoSearch\Configuration::getDefaultConfiguration()
-              ->setApiKey("X-API-Key", "YOUR_KEY");
-          // no address argument — the API resolves the caller's own IP
-          $me = (new GeoSearch\Api\IPGeolocationApi(null, $cfg))->lookupMyIP()->getData();
   /v1/countries/{code}/neighbors:
     get:
       description: Returns countries that share a border with the specified country.
@@ -3622,56 +3442,6 @@ components:
           example: -5.0
           format: double
           type: number
-    IPResult:
-      example:
-        continent:
-          code: NA
-          name: North America
-        country:
-          name: United States
-          is_in_european_union: false
-          iso_code: US
-        is_anonymous_proxy: false
-        city:
-          name: Mountain View
-        ip: 8.8.8.8
-        location:
-          timezone: America/Los_Angeles
-          latitude: 37.386
-          accuracy_radius: 1000
-          longitude: -122.0838
-        postal:
-          code: "94043"
-        is_satellite_provider: false
-        region:
-          name: California
-          iso_code: CA
-        network: 8.8.8.0/24
-      properties:
-        ip:
-          example: 8.8.8.8
-          type: string
-        network:
-          example: 8.8.8.0/24
-          type: string
-        continent:
-          $ref: "#/components/schemas/IPResult_continent"
-        country:
-          $ref: "#/components/schemas/IPResult_country"
-        region:
-          $ref: "#/components/schemas/IPResult_region"
-        city:
-          $ref: "#/components/schemas/IPResult_city"
-        postal:
-          $ref: "#/components/schemas/IPResult_postal"
-        location:
-          $ref: "#/components/schemas/IPResult_location"
-        is_anonymous_proxy:
-          example: false
-          type: boolean
-        is_satellite_provider:
-          example: false
-          type: boolean
     SearchResult:
       example:
         country: US
@@ -4246,35 +4016,6 @@ components:
       properties:
         data:
           $ref: "#/components/schemas/Timezone"
-    IPSingleResponse:
-      example:
-        data:
-          continent:
-            code: NA
-            name: North America
-          country:
-            name: United States
-            is_in_european_union: false
-            iso_code: US
-          is_anonymous_proxy: false
-          city:
-            name: Mountain View
-          ip: 8.8.8.8
-          location:
-            timezone: America/Los_Angeles
-            latitude: 37.386
-            accuracy_radius: 1000
-            longitude: -122.0838
-          postal:
-            code: "94043"
-          is_satellite_provider: false
-          region:
-            name: California
-            iso_code: CA
-          network: 8.8.8.0/24
-      properties:
-        data:
-          $ref: "#/components/schemas/IPResult"
     SearchListResponse:
       example:
         data:
@@ -4775,78 +4516,6 @@ components:
       properties:
         data:
           $ref: "#/components/schemas/getStatus_200_response_data"
-    IPResult_continent:
-      example:
-        code: NA
-        name: North America
-      properties:
-        code:
-          example: NA
-          type: string
-        name:
-          example: North America
-          type: string
-    IPResult_country:
-      example:
-        name: United States
-        is_in_european_union: false
-        iso_code: US
-      properties:
-        iso_code:
-          example: US
-          type: string
-        name:
-          example: United States
-          type: string
-        is_in_european_union:
-          example: false
-          type: boolean
-    IPResult_region:
-      example:
-        name: California
-        iso_code: CA
-      properties:
-        iso_code:
-          example: CA
-          type: string
-        name:
-          example: California
-          type: string
-    IPResult_city:
-      example:
-        name: Mountain View
-      properties:
-        name:
-          example: Mountain View
-          type: string
-    IPResult_postal:
-      example:
-        code: "94043"
-      properties:
-        code:
-          example: "94043"
-          type: string
-    IPResult_location:
-      example:
-        timezone: America/Los_Angeles
-        latitude: 37.386
-        accuracy_radius: 1000
-        longitude: -122.0838
-      properties:
-        latitude:
-          example: 37.386
-          format: double
-          type: number
-        longitude:
-          example: -122.0838
-          format: double
-          type: number
-        accuracy_radius:
-          example: 1000
-          type: integer
-        timezone:
-          example: America/Los_Angeles
-          type: string
     ErrorResponse_error_details_inner:
       example:
         field: field

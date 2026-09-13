@@ -8,7 +8,6 @@ api_boundaries.go
 api_cities.go
 api_countries.go
 api_health.go
-api_ip_geolocation.go
 api_postal_codes.go
 api_regions.go
 api_search.go
@@ -41,15 +40,6 @@ docs/GetStatus200ResponseData.md
 docs/HealthAPI.md
 docs/HierarchyListResponse.md
 docs/HierarchyNode.md
-docs/IPGeolocationAPI.md
-docs/IPResult.md
-docs/IPResultCity.md
-docs/IPResultContinent.md
-docs/IPResultCountry.md
-docs/IPResultLocation.md
-docs/IPResultPostal.md
-docs/IPResultRegion.md
-docs/IPSingleResponse.md
 docs/NearbyCity.md
 docs/NearbyCityListResponse.md
 docs/PaginationMeta.md
@@ -96,14 +86,6 @@ model_get_status_200_response.go
 model_get_status_200_response_data.go
 model_hierarchy_list_response.go
 model_hierarchy_node.go
-model_ip_result.go
-model_ip_result_city.go
-model_ip_result_continent.go
-model_ip_result_country.go
-model_ip_result_location.go
-model_ip_result_postal.go
-model_ip_result_region.go
-model_ip_single_response.go
 model_nearby_city.go
 model_nearby_city_list_response.go
 model_pagination_meta.go
@@ -128,7 +110,6 @@ test/api_boundaries_test.go
 test/api_cities_test.go
 test/api_countries_test.go
 test/api_health_test.go
-test/api_ip_geolocation_test.go
 test/api_postal_codes_test.go
 test/api_regions_test.go
 test/api_search_test.go

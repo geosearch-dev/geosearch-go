@@ -1,7 +1,7 @@
 /*
 GeoSearch
 
-Geographic data REST API — modern replacement for GeoNames.  Serves countries, regions, cities, postal codes, timezones, and IP geolocation data through a fast, well-documented JSON API with cursor-based pagination and field selection.  ## Authentication All endpoints (except health check) require an API key passed via the `X-API-Key` header.  ## Rate Limiting Two independent limits apply to every authenticated request: a per-second throttle and a monthly quota. They fail with different error codes because they call for different client behaviour — `rate_limit_exceeded` means back off for a moment, `quota_exceeded` means the plan's monthly allowance is exhausted until the period resets.  Responses include rate limit headers: - `X-RateLimit-Limit` — requests per second allowed - `X-RateLimit-Remaining` — requests remaining in current window - `X-RateLimit-Reset` — **Unix epoch second** at which the applicable limit   resets. This is an absolute timestamp, not a duration. On a   `quota_exceeded` response it carries the end of the monthly quota period   rather than the next second boundary. - `X-Monthly-RateLimit-Limit` — monthly quota - `X-Monthly-RateLimit-Remaining` — monthly requests remaining - `X-RateLimit-Upgrade` — advisory message, present only once monthly usage   passes 80% of the plan's quota - `Retry-After` — seconds to wait before retrying. Present on both 429s and   the unambiguous duration; prefer it over deriving one from   `X-RateLimit-Reset`.  ## Pagination List endpoints use cursor-based pagination with `cursor` and `limit` parameters. Maximum limit is 100. Responses include pagination metadata in the `meta` object.  ## Field Selection Use `?fields=name,population` on any endpoint to receive only the specified fields. 
+Geographic data REST API — modern replacement for GeoNames.  Serves countries, regions, cities, postal codes, and timezones through a fast, well-documented JSON API with cursor-based pagination and field selection.  ## Authentication All endpoints (except health check) require an API key passed via the `X-API-Key` header.  ## Rate Limiting Two independent limits apply to every authenticated request: a per-second throttle and a monthly quota. They fail with different error codes because they call for different client behaviour — `rate_limit_exceeded` means back off for a moment, `quota_exceeded` means the plan's monthly allowance is exhausted until the period resets.  Responses include rate limit headers: - `X-RateLimit-Limit` — requests per second allowed - `X-RateLimit-Remaining` — requests remaining in current window - `X-RateLimit-Reset` — **Unix epoch second** at which the applicable limit   resets. This is an absolute timestamp, not a duration. On a   `quota_exceeded` response it carries the end of the monthly quota period   rather than the next second boundary. - `X-Monthly-RateLimit-Limit` — monthly quota - `X-Monthly-RateLimit-Remaining` — monthly requests remaining - `X-RateLimit-Upgrade` — advisory message, present only once monthly usage   passes 80% of the plan's quota - `Retry-After` — seconds to wait before retrying. Present on both 429s and   the unambiguous duration; prefer it over deriving one from   `X-RateLimit-Reset`.  ## Pagination List endpoints use cursor-based pagination with `cursor` and `limit` parameters. Maximum limit is 100. Responses include pagination metadata in the `meta` object.  ## Field Selection Use `?fields=name,population` on any endpoint to receive only the specified fields. 
 
 API version: 1.3.3
 Contact: info@geosearch.dev
@@ -60,8 +60,6 @@ type APIClient struct {
 
 	HealthAPI *HealthAPIService
 
-	IPGeolocationAPI *IPGeolocationAPIService
-
 	PostalCodesAPI *PostalCodesAPIService
 
 	RegionsAPI *RegionsAPIService
@@ -92,7 +90,6 @@ func NewAPIClient(cfg *Configuration) *APIClient {
 	c.CitiesAPI = (*CitiesAPIService)(&c.common)
 	c.CountriesAPI = (*CountriesAPIService)(&c.common)
 	c.HealthAPI = (*HealthAPIService)(&c.common)
-	c.IPGeolocationAPI = (*IPGeolocationAPIService)(&c.common)
 	c.PostalCodesAPI = (*PostalCodesAPIService)(&c.common)
 	c.RegionsAPI = (*RegionsAPIService)(&c.common)
 	c.SearchAPI = (*SearchAPIService)(&c.common)
